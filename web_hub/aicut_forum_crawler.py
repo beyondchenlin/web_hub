@@ -18,6 +18,14 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import urllib.parse
+from pathlib import Path
+
+# 确保可以导入 shared 模块
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 
 class AicutForumCrawler:
@@ -25,19 +33,27 @@ class AicutForumCrawler:
     
     def __init__(self, username: str = "", password: str = "", test_mode: bool = True, test_once: bool = False,
                  base_url: str = "", forum_url: str = ""):
-        # 从环境变量或参数获取配置
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://tts.lrtcai.com")
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://tts.lrtcai.com/forum-2-1.html")
+        # 统一从配置文件加载默认设置
+        settings = load_forum_settings()
+        forum_cfg = settings.get("forum", {})
+        credentials_cfg = settings.get("credentials", {})
 
-        # 使用提供的论坛账号信息，支持多种环境变量名 - 统一从环境变量读取
-        self.username = (username or
-                        os.getenv('FORUM_USERNAME') or
-                        os.getenv('AICUT_ADMIN_USERNAME') or
-                        "")  # 移除硬编码默认值，强制使用环境变量
-        self.password = (password or
-                        os.getenv('FORUM_PASSWORD') or
-                        os.getenv('AICUT_ADMIN_PASSWORD') or
-                        "")  # 移除硬编码默认值，强制使用环境变量
+        # 允许外部参数或环境变量覆盖
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get("base_url", "https://tts.lrtcai.com"))
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))
+
+        self.username = (
+            username or
+            os.getenv('FORUM_USERNAME') or
+            os.getenv('AICUT_ADMIN_USERNAME') or
+            credentials_cfg.get("username", "")
+        )
+        self.password = (
+            password or
+            os.getenv('FORUM_PASSWORD') or
+            os.getenv('AICUT_ADMIN_PASSWORD') or
+            credentials_cfg.get("password", "")
+        )
 
         # 模式配置
         self.test_mode = test_mode  # 测试模式：重启后处理所有帖子；生产模式：持久化去重

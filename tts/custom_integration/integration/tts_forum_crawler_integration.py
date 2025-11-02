@@ -10,6 +10,13 @@ from typing import Dict, List, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
+
 # 导入论坛爬虫
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'web_hub'))
 
@@ -54,11 +61,14 @@ class TTSForumCrawlerIntegration:
         
         try:
             # 创建爬虫实例
+            settings = load_forum_settings()
+            forum_cfg = settings.get('forum', {})
+
             self.crawler = AicutForumCrawler(
-                username=username,
-                password=password,
-                base_url=base_url,
-                forum_url=forum_url,
+                username=username or settings.get('credentials', {}).get('username', ''),
+                password=password or settings.get('credentials', {}).get('password', ''),
+                base_url=base_url or forum_cfg.get('base_url', 'https://tts.lrtcai.com'),
+                forum_url=forum_url or forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'),
                 test_mode=False  # 生产模式
             )
             
@@ -215,12 +225,17 @@ if __name__ == "__main__":
     print("=" * 60)
     
     # 从环境变量获取凭证
-    username = os.getenv('FORUM_USERNAME', 'AI剪辑助手')
-    password = os.getenv('FORUM_PASSWORD', '594188@lrtcai')
+    settings = load_forum_settings()
+    credentials = settings.get('credentials', {})
+    forum_cfg = settings.get('forum', {})
+    username = credentials.get('username', '')
+    password = credentials.get('password', '')
     
     integration = TTSForumCrawlerIntegration(
         username=username,
-        password=password
+        password=password,
+        base_url=forum_cfg.get('base_url', 'https://tts.lrtcai.com'),
+        forum_url=forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html')
     )
     
     # 测试1：获取新帖子
@@ -243,4 +258,3 @@ if __name__ == "__main__":
 感谢使用IndexTTS2系统！
 """
     print(f"  回复内容:\n{reply_content}")
-

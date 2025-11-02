@@ -11,6 +11,13 @@ from typing import Dict, Tuple, Optional, List
 from datetime import datetime
 from pathlib import Path
 
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
+
 # 导入配置
 from tts_config import DATABASE_PATH
 from tts_forum_processor import TTSForumProcessor
@@ -32,13 +39,15 @@ class TTSForumReplyUploader:
         self.processor = TTSForumProcessor()
 
         # 初始化论坛爬虫集成
-        import os
-        username = os.getenv('FORUM_USERNAME', 'AI剪辑助手')
-        password = os.getenv('FORUM_PASSWORD', '594188@lrtcai')
+        settings = load_forum_settings()
+        forum_cfg = settings.get('forum', {})
+        credentials_cfg = settings.get('credentials', {})
 
         self.crawler_integration = TTSForumCrawlerIntegration(
-            username=username,
-            password=password
+            username=credentials_cfg.get('username', ''),
+            password=credentials_cfg.get('password', ''),
+            base_url=forum_cfg.get('base_url', 'https://tts.lrtcai.com'),
+            forum_url=forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html')
         )
 
         logger.info("✅ 论坛回复上传器初始化完成")
@@ -310,4 +319,3 @@ if __name__ == "__main__":
         user_id='forum_123'
     )
     print(reply)
-

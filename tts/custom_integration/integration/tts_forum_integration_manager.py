@@ -14,6 +14,13 @@ from datetime import datetime
 from pathlib import Path
 import uuid
 
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
+
 # 导入所有模块
 from tts_config import DATABASE_PATH
 from tts_forum_monitor import TTSForumMonitor
@@ -39,13 +46,18 @@ class TTSForumIntegrationManager:
         logger.info("🚀 初始化论坛集成管理器...")
 
         # 初始化论坛爬虫集成
-        import os
-        username = os.getenv('FORUM_USERNAME', 'AI剪辑助手')
-        password = os.getenv('FORUM_PASSWORD', '594188@lrtcai')
+        settings = load_forum_settings()
+        forum_cfg = settings.get('forum', {})
+        credentials_cfg = settings.get('credentials', {})
+
+        username = credentials_cfg.get('username', '')
+        password = credentials_cfg.get('password', '')
 
         self.crawler_integration = TTSForumCrawlerIntegration(
             username=username,
-            password=password
+            password=password,
+            base_url=forum_cfg.get('base_url', 'https://tts.lrtcai.com'),
+            forum_url=forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html')
         )
 
         # 初始化所有模块
@@ -336,4 +348,3 @@ if __name__ == "__main__":
     print("\n测试4：停止系统")
     manager.stop()
     print("  系统已停止")
-

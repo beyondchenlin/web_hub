@@ -1,6 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
+- `config/forum_settings.yaml`: 论坛域名及账号的集中配置，环境变量可覆盖。
 - `web_hub/`: 集群框架核心，含监控节点 (`cluster_monitor/`)、轻量工作节点 (`lightweight/`)、模块适配层 (`modules/`) 及依赖脚本。
 - `services/`: 面向任务调度的服务封装，例如 `services/tts_service/` 对接自研 TTS 集成。
 - `tts/`: TTS 相关代码。`indextts2/` 保留原开源版本；`custom_integration/` 提供论坛集成与启动脚本。

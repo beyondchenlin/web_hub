@@ -17,6 +17,14 @@ import threading
 from typing import Dict, List, Optional
 from datetime import datetime
 from queue import Queue
+from pathlib import Path
+
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -50,6 +58,10 @@ class TTSForumMonitor:
         self.forum_crawler = forum_crawler
         self.db_path = db_path
         self.processor = TTSForumProcessor(db_path)
+
+        settings = load_forum_settings()
+        self.forum_cfg = settings.get('forum', {})
+        self.credentials_cfg = settings.get('credentials', {})
         
         # 处理队列
         self.request_queue = Queue()
@@ -248,4 +260,3 @@ if __name__ == "__main__":
     print(f"  运行中: {status['running']}")
     
     print("\n✅ 监控模块初始化成功")
-

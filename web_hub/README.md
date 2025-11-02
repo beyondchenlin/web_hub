@@ -81,6 +81,9 @@ localhost:8006:2
 ### 环境变量
 
 ```bash
+# 论坛配置文件（推荐优先修改）
+# config/forum_settings.yaml
+
 # 论坛配置
 FORUM_USERNAME=your_username
 FORUM_PASSWORD=your_password

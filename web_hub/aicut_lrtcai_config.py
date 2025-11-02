@@ -10,8 +10,17 @@
 """
 
 import os
+import sys
+from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, Any, Optional
+
+# 确保 shared 可用
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 @dataclass
 class AicutLrtcaiConfig:
@@ -19,22 +28,22 @@ class AicutLrtcaiConfig:
     
     # 网站基本信息 - 从环境变量读取，统一配置源
     site_name: str = "懒人同城号AI-智能剪口播"
-    site_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com/"))
+    site_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/")
     site_type: str = "discuz"
     site_version: str = "X3.5"
 
     # 论坛配置 - 从环境变量读取
-    forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com") + "/forum.php")
-    mobile_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com") + "/forum.php?mobile=yes")
+    forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php")
+    mobile_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php?mobile=yes")
 
     # 目标监控板块 - 从环境变量读取
-    target_forum_id: int = field(default_factory=lambda: int(os.environ.get("FORUM_TARGET_FORUM_ID", "2")))
-    target_forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_TARGET_URL", "https://tts.lrtcai.com/forum-2-1.html"))
+    target_forum_id: int = field(default_factory=lambda: load_forum_settings()["forum"].get("forum_id", 2))
+    target_forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))
     target_forum_name: str = "智能剪口播"
 
     # 登录配置 - 从环境变量读取
-    admin_username: str = field(default_factory=lambda: os.environ.get("FORUM_USERNAME", ""))
-    admin_password: str = field(default_factory=lambda: os.environ.get("FORUM_PASSWORD", ""))
+    admin_username: str = field(default_factory=lambda: load_forum_settings()["credentials"].get("username", ""))
+    admin_password: str = field(default_factory=lambda: load_forum_settings()["credentials"].get("password", ""))
     
     # Cookie配置（用于保持登录状态）
     cookie_file: str = "cookies/aicut_lrtcai.txt"

@@ -6,12 +6,21 @@
 """
 
 import os
+import sys
 import json
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
 from typing import List, Dict, Any
 import urllib3
+from pathlib import Path
+
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 # 禁用SSL警告
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -22,18 +31,26 @@ class SimpleForumCrawler:
     
     def __init__(self, username: str = "", password: str = "", base_url: str = "", forum_url: str = ""):
         # 从环境变量获取配置
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://tts.lrtcai.com")
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://tts.lrtcai.com/forum-2-1.html")
+        settings = load_forum_settings()
+        forum_cfg = settings.get('forum', {})
+        credentials_cfg = settings.get('credentials', {})
+
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', "https://tts.lrtcai.com"))
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', "https://tts.lrtcai.com/forum-2-1.html"))
         
         # 论坛账号信息
-        self.username = (username or 
-                        os.getenv('FORUM_USERNAME') or 
-                        os.getenv('AICUT_ADMIN_USERNAME') or 
-                        "AI剪辑助手")
-        self.password = (password or 
-                        os.getenv('FORUM_PASSWORD') or 
-                        os.getenv('AICUT_ADMIN_PASSWORD') or 
-                        "594188@lrtcai")
+        self.username = (
+            username or 
+            os.getenv('FORUM_USERNAME') or 
+            os.getenv('AICUT_ADMIN_USERNAME') or 
+            credentials_cfg.get('username', "AI剪辑助手")
+        )
+        self.password = (
+            password or 
+            os.getenv('FORUM_PASSWORD') or 
+            os.getenv('AICUT_ADMIN_PASSWORD') or 
+            credentials_cfg.get('password', "594188@lrtcai")
+        )
         
         # 初始化session
         self.session = requests.Session()

@@ -4,7 +4,16 @@
 """
 
 import os
+import sys
+from pathlib import Path
 from dotenv import load_dotenv
+
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 # 加载.env文件
 load_dotenv()
@@ -19,11 +28,15 @@ class MonitorConfig:
         self.FORUM_MONITORING_ENABLED = os.getenv('FORUM_ENABLED', 'true').lower() == 'true'
 
         # 论坛网站配置 - 从.env文件读取
-        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', 'https://tts.lrtcai.com')
-        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', 'https://tts.lrtcai.com/forum-2-1.html')
-        self.FORUM_USERNAME = os.getenv('FORUM_USERNAME', os.getenv('AICUT_ADMIN_USERNAME', ''))
-        self.FORUM_PASSWORD = os.getenv('FORUM_PASSWORD', os.getenv('AICUT_ADMIN_PASSWORD', ''))
-        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID', '2'))
+        forum_settings = load_forum_settings()
+        forum_cfg = forum_settings.get('forum', {})
+        credentials_cfg = forum_settings.get('credentials', {})
+
+        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', 'https://tts.lrtcai.com'))
+        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'))
+        self.FORUM_USERNAME = os.getenv('FORUM_USERNAME', os.getenv('AICUT_ADMIN_USERNAME', credentials_cfg.get('username', '')))
+        self.FORUM_PASSWORD = os.getenv('FORUM_PASSWORD', os.getenv('AICUT_ADMIN_PASSWORD', credentials_cfg.get('password', '')))
+        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID', forum_cfg.get('forum_id', 2)))
 
         # 论坛功能配置
         self.FORUM_AUTO_REPLY_ENABLED = os.getenv('FORUM_AUTO_REPLY_ENABLED', 'true').lower() == 'true'

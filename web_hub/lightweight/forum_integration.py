@@ -16,9 +16,17 @@ import time
 import threading
 from typing import Optional, Dict, Any, List
 from datetime import datetime
+from pathlib import Path
 
 # 添加项目路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 from .queue_manager import QueueManager, TaskPriority
 from .logger import get_logger
@@ -71,12 +79,13 @@ class ForumIntegration:
         if FORUM_CRAWLER_AVAILABLE and (self.forum_enabled or forum_parsing_enabled):
             try:
                 # 从环境变量获取论坛账号信息 - 支持多种环境变量名
+                credentials = load_forum_settings().get('credentials', {})
                 username = (os.getenv('FORUM_USERNAME') or
                            os.getenv('AICUT_ADMIN_USERNAME') or
-                           'AI剪辑助手')
+                           credentials.get('username', 'AI剪辑助手'))
                 password = (os.getenv('FORUM_PASSWORD') or
                            os.getenv('AICUT_ADMIN_PASSWORD') or
-                           '594188@lrtcai')
+                           credentials.get('password', '594188@lrtcai'))
 
                 print(f"🔐 论坛登录信息: 用户名={username}, 密码={'*' * len(password) if password else '未设置'}")
 
@@ -88,8 +97,10 @@ class ForumIntegration:
                 print(f"🔍 [DEBUG] 环境变量FORUM_TEST_MODE: {os.getenv('FORUM_TEST_MODE', '未设置')}")
 
                 # 获取论坛URL配置
-                base_url = os.getenv('FORUM_BASE_URL', 'https://tts.lrtcai.com')
-                forum_url = os.getenv('FORUM_TARGET_URL', 'https://tts.lrtcai.com/forum-2-1.html')
+                settings = load_forum_settings()
+                forum_cfg = settings.get('forum', {})
+                base_url = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', 'https://tts.lrtcai.com'))
+                forum_url = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'))
 
                 print(f"🌐 论坛配置: 基础URL={base_url}, 目标URL={forum_url}")
 
@@ -676,8 +687,9 @@ class ForumReplyBot:
         if FORUM_CRAWLER_AVAILABLE:
             try:
                 # 统一从环境变量读取论坛账号信息
-                username = os.getenv('FORUM_USERNAME') or os.getenv('AICUT_ADMIN_USERNAME', '')
-                password = os.getenv('FORUM_PASSWORD') or os.getenv('AICUT_ADMIN_PASSWORD', '')
+                credentials = load_forum_settings().get('credentials', {})
+                username = os.getenv('FORUM_USERNAME') or os.getenv('AICUT_ADMIN_USERNAME', credentials.get('username', ''))
+                password = os.getenv('FORUM_PASSWORD') or os.getenv('AICUT_ADMIN_PASSWORD', credentials.get('password', ''))
                 # 获取测试模式配置
                 test_mode = getattr(config, 'forum_test_mode', True)
                 test_once = getattr(config, 'forum_test_once', False)

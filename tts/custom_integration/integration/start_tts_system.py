@@ -10,6 +10,13 @@ import signal
 import time
 from pathlib import Path
 
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
+
 # 添加项目路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -65,8 +72,9 @@ class TTSSystemStarter:
             logger.info("  💡 请先运行 tts_forum_migration.py 初始化数据库")
         
         # 检查论坛凭证
-        username = os.getenv('FORUM_USERNAME', 'AI剪辑助手')
-        password = os.getenv('FORUM_PASSWORD', '594188@lrtcai')
+        credentials = load_forum_settings()["credentials"]
+        username = credentials.get('username', '')
+        password = credentials.get('password', '')
         
         logger.info(f"\n🔐 论坛凭证:")
         logger.info(f"  用户名: {username}")
@@ -198,4 +206,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -17,9 +17,17 @@ forum_configs = config_manager.get_all_forum_configs()
 """
 
 import os
+import sys
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+
+# 确保 shared 可导入
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from shared.forum_config import load_forum_settings
 
 @dataclass
 class ForumConfig:
@@ -69,23 +77,26 @@ class ForumConfigManager:
     def _load_main_forum_config(self) -> Optional[ForumConfig]:
         """加载主论坛配置"""
         try:
-            # 检查必需的配置项
-            base_url = os.getenv('FORUM_BASE_URL')
-            target_url = os.getenv('FORUM_TARGET_URL')
-            username = os.getenv('FORUM_USERNAME') or os.getenv('AICUT_ADMIN_USERNAME')
-            password = os.getenv('FORUM_PASSWORD') or os.getenv('AICUT_ADMIN_PASSWORD')
+            settings = load_forum_settings()
+            forum_cfg = settings.get('forum', {})
+            credentials_cfg = settings.get('credentials', {})
+
+            base_url = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url'))
+            target_url = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url'))
+            username = os.getenv('FORUM_USERNAME', credentials_cfg.get('username'))
+            password = os.getenv('FORUM_PASSWORD', credentials_cfg.get('password'))
             
             if not all([base_url, target_url, username, password]):
                 print("⚠️ 主论坛配置不完整，跳过加载")
                 return None
             
             return ForumConfig(
-                name="懒人同城号AI",
+                name=settings.get('forum', {}).get('name', "懒人同城号AI"),
                 base_url=base_url,
                 target_url=target_url,
                 username=username,
                 password=password,
-                forum_id=int(os.getenv('FORUM_TARGET_FORUM_ID', '2')),
+                forum_id=int(os.getenv('FORUM_TARGET_FORUM_ID', forum_cfg.get('forum_id', 2))),
                 enabled=os.getenv('FORUM_ENABLED', 'true').lower() == 'true',
                 check_interval=int(os.getenv('FORUM_CHECK_INTERVAL', '10')),
                 auto_reply=os.getenv('FORUM_AUTO_REPLY_ENABLED', 'true').lower() == 'true',
