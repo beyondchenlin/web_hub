@@ -19,8 +19,8 @@ class MonitorConfig:
         self.FORUM_MONITORING_ENABLED = os.getenv('FORUM_ENABLED', 'true').lower() == 'true'
 
         # 论坛网站配置 - 从.env文件读取
-        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', 'https://aicut.lrtcai.com')
-        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', 'https://aicut.lrtcai.com/forum-2-1.html')
+        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', 'https://tts.lrtcai.com')
+        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', 'https://tts.lrtcai.com/forum-2-1.html')
         self.FORUM_USERNAME = os.getenv('FORUM_USERNAME', os.getenv('AICUT_ADMIN_USERNAME', ''))
         self.FORUM_PASSWORD = os.getenv('FORUM_PASSWORD', os.getenv('AICUT_ADMIN_PASSWORD', ''))
         self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID', '2'))
@@ -203,8 +203,8 @@ class ConfigManager:
 # 论坛监控配置
 FORUM_ENABLED=true
 FORUM_CHECK_INTERVAL=10
-FORUM_BASE_URL=https://aicut.lrtcai.com
-FORUM_TARGET_URL=https://aicut.lrtcai.com/forum-2-1.html
+FORUM_BASE_URL=https://tts.lrtcai.com
+FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html
 FORUM_USERNAME=AI剪辑助手
 FORUM_PASSWORD=your_password_here
 

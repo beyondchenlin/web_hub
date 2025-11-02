@@ -1280,7 +1280,7 @@ class TaskProcessor:
                     return True
 
             # 检查域名是否是论坛域名
-            if 'aicut.lrtcai.com' in url and ('thread-' in url or 'viewthread' in url):
+            if any(domain in url for domain in ('tts.lrtcai.com', 'aicut.lrtcai.com')) and ('thread-' in url or 'viewthread' in url):
                 print(f"🔍 识别为论坛帖子URL: {url}")
                 return True
 

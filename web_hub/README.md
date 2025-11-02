@@ -84,8 +84,8 @@ localhost:8006:2
 # 论坛配置
 FORUM_USERNAME=your_username
 FORUM_PASSWORD=your_password
-FORUM_BASE_URL=https://aicut.lrtcai.com
-FORUM_TARGET_URL=https://aicut.lrtcai.com/forum-2-1.html
+FORUM_BASE_URL=https://tts.lrtcai.com
+FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html
 
 # Redis配置
 REDIS_HOST=localhost
@@ -145,7 +145,7 @@ curl http://localhost:8005/api/worker/status
 
 # 发送任务到工作节点
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"url":"https://aicut.lrtcai.com/forum.php?mod=viewthread&tid=121"}' \
+  -d '{"url":"https://tts.lrtcai.com/forum.php?mod=viewthread&tid=121"}' \
   http://localhost:8005/api/worker/receive-task
 ```
 
@@ -183,4 +183,3 @@ web_hub/
 
 **最后更新**: 2025-11-02
 **版本**: v6.0 (Web Hub)
-

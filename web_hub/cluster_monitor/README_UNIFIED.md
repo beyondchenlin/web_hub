@@ -58,8 +58,8 @@ python start_standalone.py --port 8000
 # 论坛监控配置
 FORUM_ENABLED=true
 FORUM_CHECK_INTERVAL=10
-FORUM_BASE_URL=https://aicut.lrtcai.com
-FORUM_TARGET_URL=https://aicut.lrtcai.com/forum-2-1.html
+FORUM_BASE_URL=https://tts.lrtcai.com
+FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html
 FORUM_USERNAME=your_username_here
 FORUM_PASSWORD=your_secure_password_here
 

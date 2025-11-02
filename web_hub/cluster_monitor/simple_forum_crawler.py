@@ -22,8 +22,8 @@ class SimpleForumCrawler:
     
     def __init__(self, username: str = "", password: str = "", base_url: str = "", forum_url: str = ""):
         # 从环境变量获取配置
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://aicut.lrtcai.com")
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://aicut.lrtcai.com/forum-2-1.html")
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://tts.lrtcai.com")
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://tts.lrtcai.com/forum-2-1.html")
         
         # 论坛账号信息
         self.username = (username or 

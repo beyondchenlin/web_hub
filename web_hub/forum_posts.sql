@@ -143,7 +143,7 @@ INSERT OR IGNORE INTO system_config (config_key, config_value, config_type, desc
 ('forum_enabled', 'true', 'bool', '是否启用论坛监控功能'),
 ('forum_check_interval', '10', 'int', '论坛检查间隔(秒) - 统一为10秒高频监控'),
 ('target_forum_id', '2', 'int', '目标论坛板块ID'),
-('target_forum_url', 'https://aicut.lrtcai.com/forum-2-1.html', 'string', '目标论坛URL'),
+('target_forum_url', 'https://tts.lrtcai.com/forum-2-1.html', 'string', '目标论坛URL'),
 ('auto_reply_enabled', 'true', 'bool', '是否启用自动回复'),
 ('max_concurrent_downloads', '3', 'int', '最大并发下载数'),
 ('media_storage_days', '30', 'int', '媒体文件保存天数'),

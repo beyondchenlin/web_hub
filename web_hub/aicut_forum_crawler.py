@@ -4,7 +4,7 @@
 """
 懒人同城号AI - 智能剪口播板块专用爬虫
 
-专门监控: https://aicut.lrtcai.com/forum-2-1.html
+专门监控: https://tts.lrtcai.com/forum-2-1.html
 板块ID: 2
 板块名称: 智能剪口播
 """
@@ -26,8 +26,8 @@ class AicutForumCrawler:
     def __init__(self, username: str = "", password: str = "", test_mode: bool = True, test_once: bool = False,
                  base_url: str = "", forum_url: str = ""):
         # 从环境变量或参数获取配置
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://aicut.lrtcai.com")
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://aicut.lrtcai.com/forum-2-1.html")
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL', "https://tts.lrtcai.com")
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', "https://tts.lrtcai.com/forum-2-1.html")
 
         # 使用提供的论坛账号信息，支持多种环境变量名 - 统一从环境变量读取
         self.username = (username or

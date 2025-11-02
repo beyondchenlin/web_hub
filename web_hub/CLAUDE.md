@@ -79,7 +79,7 @@ curl http://localhost:8000/api/cluster/status
 ```bash
 curl http://localhost:8005/api/worker/status
 curl -X POST -H "Content-Type: application/json" \
-  -d '{"url":"https://aicut.lrtcai.com/forum.php?mod=viewthread&tid=121"}' \
+  -d '{"url":"https://tts.lrtcai.com/forum.php?mod=viewthread&tid=121"}' \
   http://localhost:8005/api/worker/receive-task
 ```
 

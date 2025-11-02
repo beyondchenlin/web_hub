@@ -88,8 +88,8 @@ class ForumIntegration:
                 print(f"🔍 [DEBUG] 环境变量FORUM_TEST_MODE: {os.getenv('FORUM_TEST_MODE', '未设置')}")
 
                 # 获取论坛URL配置
-                base_url = os.getenv('FORUM_BASE_URL', 'https://aicut.lrtcai.com')
-                forum_url = os.getenv('FORUM_TARGET_URL', 'https://aicut.lrtcai.com/forum-2-1.html')
+                base_url = os.getenv('FORUM_BASE_URL', 'https://tts.lrtcai.com')
+                forum_url = os.getenv('FORUM_TARGET_URL', 'https://tts.lrtcai.com/forum-2-1.html')
 
                 print(f"🌐 论坛配置: 基础URL={base_url}, 目标URL={forum_url}")
 

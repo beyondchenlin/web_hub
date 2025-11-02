@@ -4,7 +4,7 @@
 """
 懒人同城号AI-智能剪口播 网站集成配置
 
-网站: https://aicut.lrtcai.com/
+网站: https://tts.lrtcai.com/
 系统: Discuz! X3.5
 功能: AI视频剪辑自动化服务
 """
@@ -19,17 +19,17 @@ class AicutLrtcaiConfig:
     
     # 网站基本信息 - 从环境变量读取，统一配置源
     site_name: str = "懒人同城号AI-智能剪口播"
-    site_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://aicut.lrtcai.com/"))
+    site_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com/"))
     site_type: str = "discuz"
     site_version: str = "X3.5"
 
     # 论坛配置 - 从环境变量读取
-    forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://aicut.lrtcai.com") + "/forum.php")
-    mobile_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://aicut.lrtcai.com") + "/forum.php?mobile=yes")
+    forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com") + "/forum.php")
+    mobile_url: str = field(default_factory=lambda: os.environ.get("FORUM_BASE_URL", "https://tts.lrtcai.com") + "/forum.php?mobile=yes")
 
     # 目标监控板块 - 从环境变量读取
     target_forum_id: int = field(default_factory=lambda: int(os.environ.get("FORUM_TARGET_FORUM_ID", "2")))
-    target_forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_TARGET_URL", "https://aicut.lrtcai.com/forum-2-1.html"))
+    target_forum_url: str = field(default_factory=lambda: os.environ.get("FORUM_TARGET_URL", "https://tts.lrtcai.com/forum-2-1.html"))
     target_forum_name: str = "智能剪口播"
 
     # 登录配置 - 从环境变量读取
