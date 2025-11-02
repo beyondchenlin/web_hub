@@ -147,4 +147,168 @@ warning: in the working copy of 'web_hub/start_lightweight.py', LF will be repla
 [32m+[m[32m            # 统一显示提取到的标题[m
 [32m+[m[32m            if extracted_titles:[m
 [32m+[m[32m                print("📝 提取到的封面标题:")[m
+[32m+[m[32m                for title in extracted_titles:[m
+[32m+[m[32m                    print(f"   {title}")[m
+[32m+[m[32m        except ImportError:[m
+[32m+[m[32m            # TTS系统不需要视频处理模块，跳过封面标题提取[m
+[32m+[m[32m            pass[m
+ [m
+         return cover_info[m
+ [m
+[1mdiff --git a/web_hub/aicut_lrtcai_config.py b/web_hub/aicut_lrtcai_config.py[m
+[1mindex f4fa127..13c3f5d 100644[m
+[1m--- a/web_hub/aicut_lrtcai_config.py[m
+[1m+++ b/web_hub/aicut_lrtcai_config.py[m
+[36m@@ -28,17 +28,17 @@[m [mclass AicutLrtcaiConfig:[m
+     [m
+     # 网站基本信息 - 从环境变量读取，统一配置源[m
+     site_name: str = "懒人同城号AI-智能剪口播"[m
+[31m-    site_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/")[m
+[32m+[m[32m    site_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/")[m
+     site_type: str = "discuz"[m
+     site_version: str = "X3.5"[m
+ [m
+     # 论坛配置 - 从环境变量读取[m
+[31m-    forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php")[m
+[31m-    mobile_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php?mobile=yes")[m
+[32m+[m[32m    forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/forum.php")[m
+[32m+[m[32m    mobile_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/forum.php?mobile=yes")[m
+ [m
+     # 目标监控板块 - 从环境变量读取[m
+[31m-    target_forum_id: int = field(default_factory=lambda: load_forum_settings()["forum"].get("forum_id", 2))[m
+[31m-    target_forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))[m
+[32m+[m[32m    target_forum_id: int = field(default_factory=lambda: load_forum_settings()["forum"]["forum_id"])[m
+[32m+[m[32m    target_forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["target_url"])[m
+     target_forum_name: str = "智能剪口播"[m
+ [m
+     # 登录配置 - 从环境变量读取[m
+[1mdiff --git a/web_hub/cluster_monitor/.env.template b/web_hub/cluster_monitor/.env.template[m
+[1mindex 04cc365..bb76c19 100644[m
+[1m--- a/web_hub/cluster_monitor/.env.template[m
+[1m+++ b/web_hub/cluster_monitor/.env.template[m
+[36m@@ -27,37 +27,13 @@[m [mMACHINES_CONFIG_FILE=machines.txt[m
+ WEB_REFRESH_INTERVAL=10[m
+ [m
+ # ===========================================[m
+[31m-# 论坛监控配置（独立运行必需）[m
+[32m+[m[32m# 配置说明[m[41m[m
+[32m+[m[32m# ===========================================[m[41m[m
+[32m+[m[32m# 注意：cluster_monitor 应该从父目录 web_hub/.env 读取配置[m[41m[m
+[32m+[m[32m# 论坛URL、用户名密码等应在 web_hub/.env 中配置[m[41m[m
+[32m+[m[32m# 论坛地址在 config/forum_settings.yaml 中配置[m[41m[m
+[32m+[m[32m# 此文件仅用于 cluster_monitor 特定的配置覆盖（如果需要）[m[41m[m
+ # ===========================================[m
+[31m-[m
+[31m-# 🔧 基础配置[m
+[31m-FORUM_ENABLED=true[m
+[31m-FORUM_CHECK_INTERVAL=10[m
+[31m-[m
+[31m-# 🌐 论坛网站配置[m
+[31m-FORUM_BASE_URL=https://tts.lrtcai.com[m
+[31m-FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html[m
+[31m-[m
+[31m-# 🔒 敏感信息配置（请修改为实际值）[m
+[31m-FORUM_USERNAME=your_username_here[m
+[31m-FORUM_PASSWORD=your_secure_password_here[m
+[31m-[m
+[31m-FORUM_TARGET_FORUM_ID=2[m
+[31m-[m
+[31m-# ⚙️ 功能配置[m
+[31m-FORUM_AUTO_REPLY_ENABLED=true[m
+[31m-FORUM_TEST_MODE=false[m
+[31m-FORUM_TEST_ONCE=false[m
+[31m-[m
+[31m-# 🔄 兼容性配置（支持多种环境变量名）[m
+[31m-AICUT_ADMIN_USERNAME=your_username_here[m
+[31m-AICUT_ADMIN_PASSWORD=your_secure_password_here[m
+[31m-[m
+[31m-# 🕷️ 爬虫模式配置[m
+[31m-CRAWLER_MODE=PRODUCTION[m
+[31m-MIN_CHECK_INTERVAL=10[m
+[31m-MAX_CHECK_INTERVAL=10[m
+[31m-MAX_POSTS_TO_PROCESS=50[m
+ [m
+ # ===========================================[m
+ # 安全说明[m
+[36m@@ -67,4 +43,4 @@[m [mMAX_POSTS_TO_PROCESS=50[m
+ # 3. 确保密码强度：至少8位，包含字母数字组合[m
+ # 4. 不要将 .env 文件提交到代码仓库[m
+ # 5. 定期更换密码提高安全性[m
+[31m-# ===========================================[m
+[32m+[m[32m# ===========================================[m[41m[m
+[1mdiff --git a/web_hub/cluster_monitor/config.py b/web_hub/cluster_monitor/config.py[m
+[1mindex 92eb099..edf5d9d 100644[m
+[1m--- a/web_hub/cluster_monitor/config.py[m
+[1m+++ b/web_hub/cluster_monitor/config.py[m
+[36m@@ -5,9 +5,19 @@[m
+ [m
+ import os[m
+ import sys[m
+[32m+[m[32mimport io[m
+ from pathlib import Path[m
+ from dotenv import load_dotenv[m
+ [m
+[32m+[m[32m# Fix Windows console encoding for emoji support[m
+[32m+[m[32mif sys.platform == 'win32':[m
+[32m+[m[32m    try:[m
+[32m+[m[32m        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')[m
+[32m+[m[32m        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')[m
+[32m+[m[32m    except (AttributeError, io.UnsupportedOperation):[m
+[32m+[m[32m        # If stdout/stderr don't have buffer attribute, skip[m
+[32m+[m[32m        pass[m
 [32m+[m
+ # 确保 shared 可导入[m
+ REPO_ROOT = Path(__file__).resolve().parents[2][m
+ if str(REPO_ROOT) not in sys.path:[m
+[36m@@ -32,11 +42,11 @@[m [mclass MonitorConfig:[m
+         forum_cfg = forum_settings.get('forum', {})[m
+         credentials_cfg = forum_settings.get('credentials', {})[m
+ [m
+[31m-        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', 'https://tts.lrtcai.com'))[m
+[31m-        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'))[m
+[32m+[m[32m        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"][m
+[32m+[m[32m        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"][m
+         self.FORUM_USERNAME = os.getenv('FORUM_USERNAME', os.getenv('AICUT_ADMIN_USERNAME', credentials_cfg.get('username', '')))[m
+         self.FORUM_PASSWORD = os.getenv('FORUM_PASSWORD', os.getenv('AICUT_ADMIN_PASSWORD', credentials_cfg.get('password', '')))[m
+[31m-        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID', forum_cfg.get('forum_id', 2)))[m
+[32m+[m[32m        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID') or forum_cfg["forum_id"])[m
+ [m
+         # 论坛功能配置[m
+         self.FORUM_AUTO_REPLY_ENABLED = os.getenv('FORUM_AUTO_REPLY_ENABLED', 'true').lower() == 'true'[m
+[1mdiff --git a/web_hub/cluster_monitor/forum_monitor.py b/web_hub/cluster_monitor/forum_monitor.py[m
+[1mindex 62b8943..386a4cf 100644[m
+[1m--- a/web_hub/cluster_monitor/forum_monitor.py[m
+[1m+++ b/web_hub/cluster_monitor/forum_monitor.py[m
+[36m@@ -23,7 +23,7 @@[m [mimport logging[m
+ [m
+ from shared.forum_config import load_forum_settings[m
+ from shared.task_model import TaskType[m
+[31m-from lightweight.queue_manager import QueueManager[m
+[32m+[m[32mfrom web_hub.lightweight.queue_manager import QueueManager[m[41m[m
+ [m
+ # 添加当前目录到路径[m
+ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))[m
+[1mdiff --git a/web_hub/cluster_monitor/simple_forum_crawler.py b/web_hub/cluster_monitor/simple_forum_crawler.py[m
+[1mindex f810df6..15a3757 100644[m
+[1m--- a/web_hub/cluster_monitor/simple_forum_crawler.py[m
+[1m+++ b/web_hub/cluster_monitor/simple_forum_crawler.py[m
+[36m@@ -35,8 +35,8 @@[m [mclass SimpleForumCrawler:[m
+         forum_cfg = settings.get('forum', {})[m
+         credentials_cfg = settings.get('credentials', {})[m
+ [m
+[31m-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', "https://tts.lrtcai.com"))[m
+[31m-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', "https://tts.lrtcai.com/forum-2-1.html"))[m
+[32m+[m[32m        self.base_url = base_url or os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"][m
+[32m+[m[32m        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"][m
+         [m
+         # 论坛账号信息[m
+         self.username = ([m
+[1mdiff --git a/web_hub/lightweight/forum_integration.py b/web_hub/lightweight/forum_integration.py[m
+[1mindex e6a21d8..3a6fecb 100644[m
+[1m--- a/web_hub/lightweight/forum_integration.py[m
+[1m+++ b/web_hub/lightweight/forum_integration.py[m
+[36m@@ -99,8 +99,8 @@[m [mclass ForumIntegration:[m
+                 # 获取论坛URL配置[m
+                 settings = load_forum_settings()[m
+                 forum_cfg = settings.get('forum', {})[m
+[31m-                base_url = os.getenv('FORUM_BASE_URL', forum
