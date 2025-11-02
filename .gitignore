@@ -1,0 +1,51 @@
+# Python cache/files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / tooling
+.idea/
+.vscode/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Logs & outputs
+logs/
+**/logs/
+output/
+**/output/
+**/outputs/
+**/*.log
+
+# Runtime data
+web_hub/data/**
+!web_hub/data/
+!web_hub/data/.gitkeep
+
+# Databases & checkpoints
+**/*.db
+**/*.db.*
+**/*.sqlite
+**/*.sqlite3
+**/checkpoints/
+
+# Forum crawler cookies/session
+cookies/
+
+# Original open-source package (kept locally)
+tts/indextts2/*
+!tts/indextts2/.gitkeep
+
+# Misc
+*.tmp
+*.bak
+*.swp
+*.swo

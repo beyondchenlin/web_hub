@@ -1,0 +1,121 @@
+# Python 缓存文件
+*.pyc
+__pycache__/
+*__pycache__
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Python 虚拟环境
+mcp_env/
+venv/
+env/
+
+# 系统文件
+.DS_Store
+*.DS_Store
+Thumbs.db
+
+# 输出目录
+output/*
+!output/.gitkeep
+temp/
+logs/performance_reports/
+logs/*.log.*
+
+# 字体文件
+font/*
+!font/.gitkeep
+
+# 视频和音频文件
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.flv
+*.webm
+*.m4v
+*.3gp
+*.mp3
+*.wav
+*.aac
+*.flac
+*.ogg
+
+# 字体文件
+*.ttc
+*.ttf
+*.TTF
+*.otf
+*.woff
+*.woff2
+
+# 模型文件和大文件
+models/
+*.pt
+*.pth
+*.bin
+*.h5
+*.pkl
+*.pickle
+*.model
+*.ckpt
+*.pb
+seg_dict
+tokens.json
+
+# 数据文件
+data/media/
+data/backups/
+data/exports/
+*.db-journal
+*.sqlite3-journal
+
+# 环境变量和配置
+.env
+.env.local
+.env.production
+.env.development
+*.key
+*.pem
+*.crt
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 临时文件
+*.tmp
+*.temp
+*.log
+*.cache
+
+# 集群和监控相关的运行时文件
+cluster_monitor/logs/
+cluster_monitor/data/
+cluster_monitor/.env
+cluster_monitor/*.env
+cluster_monitor/machines.txt
+# 保留模板文件
+!cluster_monitor/.env.template
+!cluster_monitor/machines.txt.example
+
+# 参考文件夹（可能包含大文件）
+参考/
+
+# YoYo AI version control directory
+.yoyo/
+
+
+# YoYo AI version control directory
+.yoyo/

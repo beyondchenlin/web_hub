@@ -1,0 +1,517 @@
+/* 地图仪表板样式 - 从HTML内联样式提取 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Microsoft YaHei', Arial, sans-serif;
+    background: linear-gradient(135deg, #0c1445 0%, #1a237e 50%, #283593 100%);
+    color: #ffffff;
+    overflow-x: hidden;
+    height: 100vh;
+    overflow-y: hidden;
+}
+
+.header {
+    background: rgba(0, 0, 0, 0.3);
+    padding: 15px 30px;
+    border-bottom: 2px solid #00bcd4;
+    backdrop-filter: blur(10px);
+}
+
+.header h1 {
+    font-size: 28px;
+    color: #00bcd4;
+    text-shadow: 0 0 10px rgba(0, 188, 212, 0.5);
+    display: inline-block;
+}
+
+.header .status-info {
+    float: right;
+    font-size: 14px;
+    color: #b0bec5;
+}
+
+.main-container {
+    display: flex;
+    height: 100vh;
+    gap: 20px;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.left-panel {
+    width: 300px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.map-container {
+    flex: 1;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    position: relative;
+    backdrop-filter: blur(10px);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    border: 1px solid rgba(0, 188, 212, 0.3);
+    display: flex;
+    flex-direction: column;
+}
+
+.right-panel {
+    width: 350px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 10px;
+    padding: 20px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.stat-card {
+    background: rgba(0, 188, 212, 0.1);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-left: 4px solid #00bcd4;
+}
+
+.stat-card h3 {
+    font-size: 14px;
+    color: #00bcd4;
+    margin-bottom: 8px;
+}
+
+.stat-card .value {
+    font-size: 24px;
+    font-weight: bold;
+    color: #ffffff;
+}
+
+.machine-list {
+    /* 移除固定高度限制，让内容自然展开 */
+    /* max-height: 400px; */
+    /* overflow-y: auto; */
+    overflow-y: visible;
+}
+
+.machine-item {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-left: 3px solid transparent;
+}
+
+.machine-item.online {
+    border-left-color: #fce182;
+}
+
+.machine-item.busy {
+    border-left-color: #ffe66d;
+}
+
+.machine-item.offline {
+    border-left-color: #95a5a6;
+}
+
+.machine-url {
+    font-size: 12px;
+    color: #00bcd4;
+    text-decoration: none;
+}
+
+.machine-status {
+    font-size: 11px;
+    margin-top: 5px;
+}
+
+#map {
+    width: 100%;
+    flex: 1; /* 占满剩余空间 */
+    border-radius: 10px;
+    background: #1a1e45; /* 专业版飞线图背景色 */
+    border: 2px solid #22ccfb;
+    margin: 20px 0;
+    position: relative;
+    z-index: 1;
+    display: block !important;
+    visibility: visible !important;
+}
+
+.control-buttons {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    z-index: 1000;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    max-width: 300px;
+}
+
+.btn {
+    background: rgba(0, 188, 212, 0.8);
+    color: white;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: all 0.3s;
+    white-space: nowrap;
+    min-width: 100px;
+    text-align: center;
+}
+
+.btn:hover {
+    background: rgba(0, 188, 212, 1);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 188, 212, 0.3);
+}
+
+.btn-danger {
+    background: rgba(244, 67, 54, 0.8);
+}
+
+.btn-danger:hover {
+    background: rgba(244, 67, 54, 1);
+}
+
+/* 移动图例到左侧面板 */
+.legend {
+    position: static;
+    background: rgba(0, 188, 212, 0.1);
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 20px;
+    border: 1px solid rgba(0, 188, 212, 0.3);
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}
+
+.legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.pulse {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.1); opacity: 0.7; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+/* 数据更新动画 - 移除 transition 防止整个卡片刷新 */
+.stat-card {
+    /* 移除 transition: all 避免整个卡片的闪烁效果 */
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 188, 212, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* 移除整个卡片的闪烁效果，只保留数值动画 */
+.stat-card.data-updating {
+    /* 移除卡片级别的动画和缩放效果 */
+}
+
+/* 保留原动画定义，但不使用 */
+@keyframes data-flash {
+    0% { 
+        background: rgba(0, 188, 212, 0.1);
+        box-shadow: 0 0 5px rgba(0, 188, 212, 0.3);
+    }
+    30% { 
+        background: rgba(0, 188, 212, 0.3);
+        box-shadow: 0 0 15px rgba(0, 188, 212, 0.6);
+        border-left-color: #00e5ff;
+    }
+    60% { 
+        background: rgba(0, 188, 212, 0.2);
+        box-shadow: 0 0 10px rgba(0, 188, 212, 0.4);
+    }
+    100% { 
+        background: rgba(0, 188, 212, 0.1);
+        box-shadow: 0 0 5px rgba(0, 188, 212, 0.3);
+    }
+}
+
+/* 数据滚动动画容器和高亮效果 */
+.stat-card .value {
+    overflow: hidden;
+    position: relative;
+    transition: color 0.3s ease, text-shadow 0.3s ease;
+}
+
+/* 防止刷新时显示错误数据的闪烁 */
+#value-failed-tasks,
+#value-successful-tasks {
+    visibility: hidden;
+    opacity: 0;
+    transition: visibility 0s, opacity 0.3s ease;
+}
+
+/* 数据修正完成后显示 */
+.data-corrected #value-failed-tasks,
+.data-corrected #value-successful-tasks {
+    visibility: visible;
+    opacity: 1;
+}
+
+.machine-item {
+    transition: all 0.3s ease;
+}
+
+.machine-item:hover {
+    transform: translateX(5px);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* 按钮点击效果 */
+.btn:active {
+    transform: translateY(1px);
+}
+
+/* 地图容器动画 */
+.map-container {
+    transition: all 0.3s ease;
+}
+
+/* 左侧面板按钮区域 */
+.left-panel-buttons {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #333;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.left-panel-buttons .btn {
+    width: 100%;
+    padding: 10px 15px;
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.left-panel-buttons .btn:hover {
+    background: linear-gradient(135deg, #2a5298, #3d6bb3);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(42, 82, 152, 0.4);
+}
+
+.left-panel-buttons .btn.btn-danger {
+    background: linear-gradient(135deg, #dc3545, #c82333);
+}
+
+.left-panel-buttons .btn.btn-danger:hover {
+    background: linear-gradient(135deg, #c82333, #bd2130);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+}
+
+/* 数据加载指示器 */
+.loading {
+    position: relative;
+    overflow: hidden;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(0, 188, 212, 0.3), transparent);
+    animation: loading 1.5s infinite;
+}
+
+@keyframes loading {
+    0% { left: -100%; }
+    100% { left: 100%; }
+}
+
+/* 响应式设计 - 适应不同屏幕尺寸 */
+
+/* 超大屏幕 (100英寸电视, LED屏等) */
+@media screen and (min-width: 1920px) {
+    .main-container {
+        padding: 30px;
+        gap: 30px;
+    }
+
+    .left-panel {
+        min-width: 350px;
+        padding: 30px;
+    }
+
+    .control-buttons {
+        top: 30px;
+        right: 40px;
+        max-width: 400px;
+        gap: 15px;
+    }
+
+    .btn {
+        padding: 15px 25px;
+        font-size: 16px;
+        min-width: 140px;
+    }
+
+    .machine-item {
+        padding: 15px;
+        font-size: 16px;
+    }
+
+    .status-info {
+        font-size: 16px;
+    }
+
+    h1 {
+        font-size: 40px !important;
+        top: 100px !important;
+    }
+}
+
+/* 4K及以上超大屏幕 */
+@media screen and (min-width: 3840px) {
+    .main-container {
+        padding: 50px;
+        gap: 50px;
+    }
+
+    .left-panel {
+        min-width: 500px;
+        padding: 50px;
+    }
+
+    .control-buttons {
+        top: 50px;
+        right: 60px;
+        max-width: 600px;
+        gap: 20px;
+    }
+
+    .btn {
+        padding: 20px 35px;
+        font-size: 20px;
+        min-width: 180px;
+    }
+
+    .machine-item {
+        padding: 20px;
+        font-size: 20px;
+    }
+
+    .status-info {
+        font-size: 20px;
+    }
+
+    h1 {
+        font-size: 60px !important;
+        top: 120px !important;
+    }
+}
+
+/* 中等屏幕 */
+@media screen and (max-width: 1366px) {
+    .main-container {
+        padding: 15px;
+        gap: 15px;
+    }
+
+    .left-panel {
+        min-width: 250px;
+        padding: 15px;
+    }
+
+    .control-buttons {
+        top: 15px;
+        right: 20px;
+        max-width: 250px;
+        gap: 8px;
+    }
+
+    .btn {
+        padding: 8px 14px;
+        font-size: 11px;
+        min-width: 80px;
+    }
+
+    h1 {
+        font-size: 24px !important;
+        top: 60px !important;
+    }
+}
+
+/* 小屏幕 */
+@media screen and (max-width: 1024px) {
+    .main-container {
+        flex-direction: column;
+        height: auto;
+        min-height: 100vh;
+    }
+
+    .left-panel {
+        min-width: auto;
+        width: 100%;
+        order: 2;
+    }
+
+    .map-container {
+        order: 1;
+        min-height: 60vh;
+    }
+
+    .control-buttons {
+        position: relative;
+        top: auto;
+        right: auto;
+        margin-bottom: 20px;
+        justify-content: center;
+        max-width: none;
+    }
+
+    h1 {
+        position: relative !important;
+        top: auto !important;
+        transform: none !important;
+        left: auto !important;
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 20px !important;
+    }
+}
+
+.clearfix::after {
+    content: "";
+    display: table;
+    clear: both;
+}

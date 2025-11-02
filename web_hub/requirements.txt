@@ -1,0 +1,89 @@
+# FunClip-XiaoCut-Cut6.0 实际依赖
+# 基于39个Python文件的代码分析
+# Python 3.10+
+
+# ==================== 核心依赖（代码中直接import） ====================
+# 网络请求和爬虫
+requests>=2.31.0,<3.0.0
+urllib3>=2.0.0,<3.0.0
+beautifulsoup4>=4.12.0,<5.0.0
+lxml>=4.9.0,<5.0.0
+
+# Web服务
+flask>=2.3.3,<4.0.0
+werkzeug>=2.3.7,<4.0.0
+
+# 数据存储
+redis>=5.0.0,<6.0.0
+hiredis>=2.2.0,<3.0.0
+
+# 系统监控
+psutil>=5.8.0,<8.0.0
+GPUtil>=1.4.0,<2.0.0
+pynvml>=11.5.0,<13.0.0
+
+# 配置和模板
+python-dotenv>=1.0.0,<2.0.0
+pyyaml>=6.0.0,<7.0.0
+jinja2>=3.0.0,<4.0.0
+
+# ==================== 语音识别（funasr依赖） ====================
+funasr>=1.2.0,<2.0.0
+
+# funasr运行需要的依赖
+numpy>=2.0.0,<3.0.0
+scipy>=1.11.0,<2.0.0
+pandas>=2.2.0,<3.0.0
+librosa>=0.10.0,<0.12.0
+soundfile>=0.12.0,<0.14.0
+resampy>=0.4.0,<1.0.0
+modelscope>=1.9.0,<2.0.0
+
+# PyTorch（需单独安装）
+# GPU: pip install torch>=2.6.0+cu124 torchaudio>=2.6.0+cu124 --extra-index-url https://download.pytorch.org/whl/cu124
+# CPU: pip install torch>=2.6.0 torchaudio>=2.6.0
+
+# ==================== 视频处理（pre.pipeline依赖） ====================
+# 注意：task_processor.py中导入了pre.模块，如果需要视频处理功能需要安装：
+moviepy==1.0.3
+imageio>=2.31.0,<3.0.0
+imageio-ffmpeg>=0.6.0
+av>=10.0.0,<11.0.0
+auto-editor>=24.0.0,<30.0.0
+Pillow>=10.0.0,<11.0.0
+opencv-python>=4.8.0,<5.0.0
+
+# ==================== 浏览器自动化（可选，browser_mcp_server.py） ====================
+# 如果需要浏览器自动化功能：
+# mcp>=0.9.0,<1.0.0
+# playwright>=1.40.0,<2.0.0
+
+# ==================== AI大模型接口（可选） ====================
+# 如果使用AI功能：
+# openai>=1.0.0,<2.0.0
+# dashscope>=1.14.0,<2.0.0
+
+# ==================== 云存储（可选） ====================
+# 如果需要上传到云端：
+# cos-python-sdk-v5>=1.9.0,<2.0.0
+# boto3>=1.28.0,<2.0.0
+
+# ==================== 其他工具 ====================
+python-dateutil>=2.8.0,<3.0.0
+chardet>=5.0.0,<6.0.0
+rich>=13.0.0,<15.0.0
+tqdm>=4.65.0,<5.0.0
+pywin32>=306; sys_platform == "win32"
+
+# ==================== 说明 ====================
+# 1. 直接import的库（14个）：已包含在核心依赖
+# 2. funasr的运行依赖：numpy, scipy, pandas, librosa等
+# 3. 视频处理依赖：moviepy, opencv等（如果使用pre.pipeline）
+# 4. 可选依赖：playwright, openai等（按需安装）
+#
+# 最小安装（仅论坛爬虫）：
+#   requests, beautifulsoup4, lxml, redis, flask, psutil, GPUtil, 
+#   python-dotenv, pyyaml, jinja2
+#
+# 完整安装（包含AI和视频）：
+#   以上所有依赖
