@@ -27,6 +27,7 @@ from .queue_manager import QueueManager, TaskPriority
 from .resource_monitor import LightweightResourceMonitor
 from .task_processor import TaskProcessor
 from .logger import get_logger
+from shared.task_model import TaskType
 
 # 导入论坛集成模块
 try:
@@ -127,6 +128,7 @@ class WebServer:
                 source_path = data.get('source_path')
                 post_url = data.get('post_url')  # 新增：支持帖子URL
                 priority = data.get('priority', 'normal')
+                task_type_raw = data.get('task_type', TaskType.VIDEO.value)
 
                 # 支持三种任务类型：直接视频URL、本地文件路径、帖子URL
                 if not source_url and not source_path and not post_url:
@@ -146,13 +148,16 @@ class WebServer:
                     'urgent': TaskPriority.URGENT
                 }
                 task_priority = priority_map.get(priority.lower(), TaskPriority.NORMAL)
-                
+                task_type = self._parse_task_type(task_type_raw)
+
                 # 创建任务
                 task_id = self.queue_manager.create_task(
                     source_url=source_url,
                     source_path=source_path,
                     priority=task_priority,
-                    metadata=metadata
+                    metadata=metadata,
+                    payload=data.get('payload'),
+                    task_type=task_type,
                 )
                 
                 return jsonify({
@@ -968,3 +973,16 @@ class WebServer:
         except Exception as e:
             self.logger.error(f"Web服务器运行错误: {e}")
             self.running = False
+
+    def _parse_task_type(self, value: Any) -> TaskType:
+        if isinstance(value, TaskType):
+            return value
+        if isinstance(value, str):
+            try:
+                return TaskType(value.lower())
+            except ValueError:
+                try:
+                    return TaskType[value.upper()]
+                except KeyError:
+                    return TaskType.VIDEO
+        return TaskType.VIDEO

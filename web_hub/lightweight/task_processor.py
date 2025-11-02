@@ -25,11 +25,14 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # 添加项目路径
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from shared.task_model import TaskType
+
 from .queue_manager import QueueManager, VideoTask, TaskStatus
 from .resource_monitor import LightweightResourceMonitor
 from .logger import get_logger
 from .performance_tracker import performance_tracker
 from .report_generator import report_generator
+from .task_router import TaskRouter
 
 
 class TaskProcessor:
@@ -41,6 +44,7 @@ class TaskProcessor:
         self.queue_manager = queue_manager
         self.resource_monitor = resource_monitor
         self.logger = get_logger("TaskProcessor")
+        self.task_router = TaskRouter(config)
         
         # 线程池
         self.download_executor = ThreadPoolExecutor(
@@ -265,17 +269,24 @@ class TaskProcessor:
                     self._log_status_summary()
                     continue
 
-                # 获取到任务时输出信息，包括等待次数
-                wait_info = f" (等待了{self.process_no_task_count}次)" if self.process_no_task_count > 0 else ""
+                # TTS任务直接走适配器处理
+                if task.task_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                    self.process_no_task_count = 0
+                    self._process_tts_task(task)
+                    continue
+
+                wait_info = (
+                    f" (等待了{self.process_no_task_count}次)"
+                    if self.process_no_task_count > 0
+                    else ""
+                )
                 print(f"✅ 获取到处理任务: {task.task_id}{wait_info}")
                 print(f"📁 源文件路径: {task.source_path}")
                 self.logger.info(f"获取到处理任务: {task.task_id}{wait_info}")
                 self.logger.info(f"源文件路径: {task.source_path}")
 
-                # 重置计数器
                 self.process_no_task_count = 0
 
-                # 提交到线程池（异步执行，不等待完成）
                 print(f"🚀 提交任务到线程池: {task.task_id}")
                 future = self.process_executor.submit(self._process_video, task)
                 self.logger.info(f"任务已提交到线程池: {task.task_id}")
@@ -409,6 +420,41 @@ class TaskProcessor:
             error_msg = f"下载失败: {str(e)}"
             self.logger.error(f"任务 {task.task_id} {error_msg}")
             self.queue_manager.fail_task(task.task_id, error_msg)
+
+    def _process_tts_task(self, task: VideoTask) -> None:
+        """Handle TTS/voice clone tasks via the router."""
+
+        self.logger.info(f"开始处理TTS任务: {task.task_id}")
+        try:
+            route_result = self.task_router.route(task)
+            if not route_result.get("success"):
+                error_message = route_result.get("error", "TTS任务处理失败")
+                self.logger.error(f"TTS任务失败: {task.task_id}, 错误: {error_message}")
+                self.queue_manager.fail_task(task.task_id, error_message, retry=False)
+                return
+
+            reply_payload = route_result.get("reply")
+            if reply_payload:
+                from shared.forum_reply_manager import get_forum_reply_manager
+
+                reply_manager = get_forum_reply_manager()
+                reply_manager.reply_with_task_result(task, reply_payload)
+
+                attachments = reply_payload.get("attachments") or []
+                if attachments:
+                    task.output_files = attachments
+
+            self.queue_manager.update_task_status(
+                task.task_id,
+                TaskStatus.COMPLETED,
+                result=route_result.get("result"),
+            )
+            self.logger.info(f"TTS任务完成: {task.task_id}")
+
+        except Exception as exc:  # pragma: no cover - defensive logging
+            error_message = f"TTS任务执行异常: {exc}"
+            self.logger.error(error_message)
+            self.queue_manager.fail_task(task.task_id, error_message, retry=False)
     
     def _download_video(self, url: str, local_path: str, task_id: str):
         """真实的视频下载逻辑"""

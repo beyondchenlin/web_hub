@@ -54,6 +54,10 @@ class MonitorConfig:
         # 任务分发配置
         self.TASK_DISPATCH_STRATEGY = os.getenv('TASK_DISPATCH_STRATEGY', 'least_busy')  # 分发策略
         # 可选值: 'least_busy', 'priority', 'round_robin'
+        self.TASK_DISPATCH_MODE = os.getenv('TASK_DISPATCH_MODE', 'cluster').lower()
+        if self.TASK_DISPATCH_MODE not in {'cluster', 'local', 'hybrid'}:
+            print(f"⚠️ 未知的 TASK_DISPATCH_MODE: {self.TASK_DISPATCH_MODE}，将退回 cluster")
+            self.TASK_DISPATCH_MODE = 'cluster'
 
         # 日志配置
         self.LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
@@ -141,6 +145,13 @@ class MonitorConfig:
             if self.FORUM_AUTO_REPLY_ENABLED:
                 print(f"   - 自动回复: ✅ 启用")
 
+            dispatch_mode_map = {
+                'cluster': '集群节点',
+                'local': '本地队列',
+                'hybrid': '集群优先 + 本地兜底'
+            }
+            print(f"   - 分发模式: {dispatch_mode_map.get(self.TASK_DISPATCH_MODE, '集群节点')}")
+
     def _parse_forum_urls(self):
         """解析论坛URL配置（兼容旧版本）"""
         urls_str = os.getenv('FORUM_URLS', '')
@@ -159,6 +170,10 @@ class MonitorConfig:
     def get_task_dispatch_strategy(self):
         """获取任务分发策略"""
         return self.TASK_DISPATCH_STRATEGY
+
+    def get_task_dispatch_mode(self):
+        """获取任务分发模式"""
+        return self.TASK_DISPATCH_MODE
     
     def is_forum_monitoring_enabled(self):
         """是否启用论坛监控"""

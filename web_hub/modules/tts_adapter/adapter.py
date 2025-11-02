@@ -8,8 +8,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
+from shared.task_model import TaskType
 from services.tts_service import TTSTaskService
 
 
@@ -24,12 +25,12 @@ class AdapterResult:
 class TTSModuleAdapter:
     """对接 Web Hub 与 TTS 服务层的适配器。"""
 
-    supported_task_types = {"tts", "voice_clone"}
+    supported_task_types = {TaskType.TTS.value, TaskType.VOICE_CLONE.value}
 
     def __init__(self, service: TTSTaskService | None = None) -> None:
         self.service = service or TTSTaskService()
 
-    def consume(self, task_type: str, payload: Dict[str, Any]) -> AdapterResult:
+    def consume(self, task_type: Union[str, TaskType], payload: Dict[str, Any]) -> AdapterResult:
         """
         消费调度层派发的任务。
 
@@ -40,10 +41,14 @@ class TTSModuleAdapter:
         Returns:
             AdapterResult: 标准化结果，供调度层继续后续流程。
         """
-        if task_type not in self.supported_task_types:
-            return AdapterResult(False, {"error": f"不支持的任务类型: {task_type}"})
+        normalized_type = task_type.value if isinstance(task_type, TaskType) else str(task_type).lower()
 
-        if task_type == "tts":
+        if normalized_type not in self.supported_task_types:
+            return AdapterResult(False, {"error": f"不支持的任务类型: {normalized_type}"})
+
+        payload_body = payload or {}
+
+        if normalized_type == TaskType.TTS.value:
             result = self.service.handle_tts_task(payload)
         else:
             result = self.service.handle_voice_clone_task(payload)
@@ -51,9 +56,9 @@ class TTSModuleAdapter:
         # 统一封装回复内容，方便后续回帖或状态上报
         formatted_reply = self.service.format_forum_reply(
             {
-                **payload,
+                **payload_body,
                 **result.get("result", {}),
-                "request_type": task_type,
+                "request_type": normalized_type,
             }
         )
 

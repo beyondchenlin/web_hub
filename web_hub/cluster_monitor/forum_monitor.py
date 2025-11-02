@@ -21,6 +21,10 @@ from typing import List, Dict, Optional
 import json
 import logging
 
+from shared.forum_config import load_forum_settings
+from shared.task_model import TaskType
+from lightweight.queue_manager import QueueManager
+
 # 添加当前目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # 添加父目录到路径以导入论坛爬虫
@@ -82,6 +86,18 @@ class ForumMonitor:
         self.port = port
         self.app = Flask(__name__)
         self.config = MonitorConfig()
+        self.dispatch_mode = getattr(self.config, 'TASK_DISPATCH_MODE', 'cluster').lower()
+        self.queue_manager: Optional[QueueManager] = None
+        if self.dispatch_mode in {'local', 'hybrid'}:
+            try:
+                self.queue_manager = QueueManager()
+                print(f"✅ 本地队列管理器初始化成功 (模式: {self.dispatch_mode})")
+            except Exception as exc:
+                print(f"⚠️ 本地队列管理器初始化失败: {exc}")
+                self.queue_manager = None
+                if self.dispatch_mode == 'local':
+                    print("❌ 分发模式设置为 local 但队列初始化失败，将回退到 cluster")
+                    self.dispatch_mode = 'cluster'
         
         # 设置日志
         self.setup_logging()
@@ -191,7 +207,8 @@ class ForumMonitor:
                 'failed_tasks': 0,
                 'last_forum_check': None,
                 'new_posts_found': 0,
-                'start_time': datetime.now()
+                'start_time': datetime.now(),
+                'local_tasks_queued': 0
             }
             print("📊 使用原始统计数据")
 
@@ -688,9 +705,28 @@ class ForumMonitor:
                                 'cover_title_up': cover_title_up,
                                 'cover_title_down': cover_title_down,
                                 'discovered_at': datetime.now().isoformat(),
-                                'forum_name': post.get('forum_name', '智能剪口播')
+                                'forum_name': post.get('forum_name', '智能剪口播'),
+                                'source': 'forum'
                             }
                         }
+                        detected_type = self._detect_task_type(task)
+                        task['task_type'] = detected_type.value
+                        task['metadata']['task_type'] = detected_type.value
+                        if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                            task['source'] = 'forum_tts'
+                            payload = {
+                                'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
+                                'title': task.get('title', ''),
+                                'content': task.get('content', ''),
+                                'author': task.get('author', ''),
+                                'forum_name': task['metadata'].get('forum_name'),
+                                'post_id': task['metadata'].get('post_id'),
+                                'post_url': task.get('post_url'),
+                            }
+                            task['payload'] = payload
+                            task['metadata']['source'] = 'forum_tts'
+                        else:
+                            task['metadata']['source'] = 'forum'
                         print(f"📝 准备分发完整帖子信息: {task['title']}")
                         if task['cover_title_up']:
                             print(f"📝 封面标题上: {task['cover_title_up']}")
@@ -707,9 +743,27 @@ class ForumMonitor:
                                 'post_id': post.get('thread_id'),
                                 'post_url': post.get('thread_url'),
                                 'discovered_at': datetime.now().isoformat(),
-                                'forum_name': post.get('forum_name', '智能剪口播')
+                                'forum_name': post.get('forum_name', '智能剪口播'),
+                                'author': post.get('author', ''),
+                                'source': 'forum'
                             }
                         }
+                        detected_type = self._detect_task_type(task)
+                        task['task_type'] = detected_type.value
+                        task['metadata']['task_type'] = detected_type.value
+                        if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                            task['source'] = 'forum_tts'
+                            payload = {
+                                'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
+                                'title': task.get('title', ''),
+                                'content': '',
+                                'author': task['metadata'].get('author'),
+                                'forum_name': task['metadata'].get('forum_name'),
+                                'post_id': task['metadata'].get('post_id'),
+                                'post_url': task.get('post_url'),
+                            }
+                            task['payload'] = payload
+                            task['metadata']['source'] = 'forum_tts'
                         print(f"📝 准备分发基本帖子信息: {task['title']}")
 
                     tasks.append(task)
@@ -764,6 +818,62 @@ class ForumMonitor:
             machine.current_tasks = 0
             machine.last_error = str(e)[:100]  # 限制错误信息长度
     
+    def _detect_task_type(self, task_data: Dict) -> TaskType:
+        title = (task_data.get('title') or '').lower()
+        content = (task_data.get('content') or '').lower()
+
+        clone_keywords = [
+            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音', '语音克隆'
+        ]
+        tts_keywords = [
+            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成'
+        ]
+
+        if any(keyword in title or keyword in content for keyword in clone_keywords):
+            return TaskType.VOICE_CLONE
+        if any(keyword in title or keyword in content for keyword in tts_keywords):
+            return TaskType.TTS
+        return TaskType.VIDEO
+
+    def _build_queue_payload(self, post_data: Dict, formatted_task: Dict) -> Dict:
+        metadata = post_data.get('metadata', {})
+        payload = {
+            'thread_id': metadata.get('post_id') or metadata.get('thread_id'),
+            'thread_url': post_data.get('post_url') or formatted_task.get('url'),
+            'video_urls': post_data.get('video_urls', []),
+            'original_filenames': post_data.get('original_filenames', []),
+            'author_id': metadata.get('author_id'),
+            'author': post_data.get('author') or metadata.get('author'),
+            'forum_name': metadata.get('forum_name'),
+            'title': post_data.get('title'),
+            'content': post_data.get('content'),
+            'cover_info': post_data.get('cover_info') or metadata.get('cover_info'),
+            'source': post_data.get('source', metadata.get('source', 'forum')),
+            'payload': post_data.get('payload'),
+            'task_type': post_data.get('task_type', TaskType.VIDEO.value),
+        }
+
+        if not payload['thread_url']:
+            payload['thread_url'] = formatted_task.get('url') or metadata.get('post_url')
+
+        if not payload['video_urls'] and formatted_task.get('metadata', {}).get('video_urls'):
+            payload['video_urls'] = formatted_task['metadata']['video_urls']
+
+        return payload
+
+    def _submit_to_local_queue(self, post_data: Dict, formatted_task: Dict) -> Optional[str]:
+        if not self.queue_manager:
+            self.logger.error("本地队列管理器不可用，无法提交任务")
+            return None
+
+        queue_payload = self._build_queue_payload(post_data, formatted_task)
+        try:
+            task_id = self.queue_manager.submit_task(queue_payload)
+            return task_id
+        except Exception as exc:
+            self.logger.error(f"提交任务到本地队列失败: {exc}")
+            return None
+
     def _format_task_data(self, task_data: Dict) -> Dict:
         """格式化任务数据以匹配工作节点期望的格式"""
         formatted_task = {}
@@ -793,6 +903,10 @@ class ForumMonitor:
             print(f"📝 生成集群任务ID: {task_id}")
         else:
             formatted_task['task_id'] = task_data['task_id']
+
+        formatted_task['task_type'] = task_data.get('task_type', TaskType.VIDEO.value)
+        if 'payload' in task_data and task_data['payload'] is not None:
+            formatted_task['payload'] = task_data['payload']
 
         # 处理metadata字段
         metadata = {}
@@ -889,6 +1003,9 @@ class ForumMonitor:
         if 'title' not in metadata:
             metadata['title'] = f"集群任务 - {datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
+        metadata['task_type'] = formatted_task['task_type']
+        metadata['video_urls'] = task_data.get('video_urls', [])
+ 
         formatted_task['metadata'] = metadata
 
         # 添加其他可能的字段
@@ -951,36 +1068,82 @@ class ForumMonitor:
                 self.data_manager.mark_post_failed(post_id, f"格式化任务数据失败: {e}")
             return
 
+        # 本地队列模式直接提交
+        if self.dispatch_mode == 'local':
+            queued_id = self._submit_to_local_queue(post_data, formatted_task)
+            if queued_id:
+                if self.data_manager:
+                    self.data_manager.mark_post_dispatched(post_id, 'local_queue')
+                self.add_real_stat('total_tasks_sent', 1)
+                self.add_real_stat('successful_tasks', 1)
+                self.add_real_stat('local_tasks_queued', 1)
+                print(f"✅ 任务已排入本地队列: {title} (任务ID: {queued_id})")
+                self.logger.info(f"任务排入本地队列: {post_id}")
+            else:
+                if self.data_manager:
+                    self.data_manager.mark_post_failed(post_id, "本地队列提交失败")
+                self.add_real_stat('total_tasks_sent', 1)
+                self.add_real_stat('failed_tasks', 1)
+                print(f"❌ 提交任务到本地队列失败: {title}")
+                self.logger.error(f"提交任务到本地队列失败: {post_id}")
+            return
+
         machine = self.select_best_machine()
         if machine:
             success = self.send_task_to_machine(machine, formatted_task)
             if success:
-                # 标记为已分发
                 if self.data_manager:
                     self.data_manager.mark_post_dispatched(post_id, machine.url)
 
-                # 使用新的统计方法
                 self.add_real_stat('total_tasks_sent', 1)
                 self.add_real_stat('successful_tasks', 1)
                 print(f"✅ 任务已发送到 {machine.url}: {title}")
                 self.logger.info(f"任务已发送到 {machine.url}: {post_id}")
-            else:
-                # 标记为失败
-                if self.data_manager:
-                    self.data_manager.mark_post_failed(post_id, "任务发送失败")
+                return
 
-                # 使用新的统计方法
-                self.add_real_stat('total_tasks_sent', 1)
-                self.add_real_stat('failed_tasks', 1)
-                print(f"❌ 任务发送失败: {machine.url}")
-                self.logger.error(f"任务发送失败: {machine.url}")
-        else:
-            # 标记为失败
+            self.logger.error(f"任务发送失败: {machine.url}")
+            print(f"❌ 任务发送失败: {machine.url}")
+
+            if self.dispatch_mode == 'hybrid':
+                queued_id = self._submit_to_local_queue(post_data, formatted_task)
+                if queued_id:
+                    if self.data_manager:
+                        self.data_manager.mark_post_dispatched(post_id, 'local_queue')
+                    self.add_real_stat('total_tasks_sent', 1)
+                    self.add_real_stat('successful_tasks', 1)
+                    self.add_real_stat('local_tasks_queued', 1)
+                    print(f"✅ 失败后切换到本地队列: {title} (任务ID: {queued_id})")
+                    self.logger.info(f"任务发送失败后改为本地队列: {post_id}")
+                    return
+
             if self.data_manager:
-                self.data_manager.mark_post_failed(post_id, "没有可用的处理机器")
+                self.data_manager.mark_post_failed(post_id, "任务发送失败")
+            self.add_real_stat('total_tasks_sent', 1)
+            self.add_real_stat('failed_tasks', 1)
+            self.logger.error(f"任务发送失败且未能回退: {post_id}")
+            return
 
-            print("⚠️ 没有可用的处理机器")
-            self.logger.warning("没有可用的处理机器")
+        # 没有可用机器
+        self.logger.warning("没有可用的处理机器")
+        print("⚠️ 没有可用的处理机器")
+
+        if self.dispatch_mode == 'hybrid':
+            queued_id = self._submit_to_local_queue(post_data, formatted_task)
+            if queued_id:
+                if self.data_manager:
+                    self.data_manager.mark_post_dispatched(post_id, 'local_queue')
+                self.add_real_stat('total_tasks_sent', 1)
+                self.add_real_stat('successful_tasks', 1)
+                self.add_real_stat('local_tasks_queued', 1)
+                print(f"✅ 无机器可用，任务排入本地队列: {title} (任务ID: {queued_id})")
+                self.logger.info(f"无机器可用，任务排入本地队列: {post_id}")
+                return
+
+        if self.data_manager:
+            self.data_manager.mark_post_failed(post_id, "没有可用的处理机器")
+        self.add_real_stat('total_tasks_sent', 1)
+        self.add_real_stat('failed_tasks', 1)
+        self.logger.warning(f"没有可用的处理机器且未能回退: {post_id}")
 
     def _generate_task_key(self, post_data: Dict) -> str:
         """生成任务唯一标识"""
@@ -1062,3 +1225,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
