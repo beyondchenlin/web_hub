@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(redis-cli ping:*)",
+      "Bash(powershell -Command:*)",
+      "Bash(powershell.exe -ExecutionPolicy Bypass -File \"启动系统.ps1\")",
+      "Bash(PYTHONPATH=/d/index-tts-2-6G-0914/index-tts-2 TASK_DISPATCH_MODE=local FORUM_TEST_MODE=true /d/index-tts-2-6G-0914/index-tts-2/tts/indextts2/py312/python.exe:*)",
+      "Bash(PYTHONPATH=/d/index-tts-2-6G-0914/index-tts-2 /d/index-tts-2-6G-0914/index-tts-2/tts/indextts2/py312/python.exe:*)",
+      "Bash(curl:*)",
+      "Bash(env)",
+      "Bash(redis-cli:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

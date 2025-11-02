@@ -1,0 +1,150 @@
+warning: in the working copy of 'config/forum_settings.yaml', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'shared/forum_config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/.env.example', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/aicut_forum_crawler.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/aicut_lrtcai_config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/cluster_monitor/config.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/cluster_monitor/simple_forum_crawler.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/lightweight/forum_integration.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'web_hub/start_lightweight.py', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/config/forum_settings.yaml b/config/forum_settings.yaml[m
+[1mindex 9695e60..6959d1c 100644[m
+[1m--- a/config/forum_settings.yaml[m
+[1m+++ b/config/forum_settings.yaml[m
+[36m@@ -2,6 +2,3 @@[m [mforum:[m
+   base_url: https://tts.lrtcai.com[m
+   target_url: https://tts.lrtcai.com/forum-2-1.html[m
+   forum_id: 2[m
+[31m-credentials:[m
+[31m-  username: AI剪辑助手[m
+[31m-  password: 594188@lrtcai[m
+[1mdiff --git a/shared/forum_config.py b/shared/forum_config.py[m
+[1mindex 6567aac..1fb72a2 100644[m
+[1m--- a/shared/forum_config.py[m
+[1m+++ b/shared/forum_config.py[m
+[36m@@ -71,7 +71,7 @@[m [mdef load_forum_settings(config_path: str | Path | None = None) -> Dict[str, Any][m
+     if "forum" not in config:[m
+         config["forum"] = {}[m
+     if "credentials" not in config:[m
+[31m-        config["credentials"] = {}[m
+[32m+[m[32m        config["credentials"] = {}  # YAML中不应包含credentials，从.env读取[m
+ [m
+     config = _merge_env_overrides(config)[m
+ [m
+[1mdiff --git a/web_hub/.env.example b/web_hub/.env.example[m
+[1mindex e3d9155..f680b13 100644[m
+[1m--- a/web_hub/.env.example[m
+[1m+++ b/web_hub/.env.example[m
+[36m@@ -57,15 +57,22 @@[m [mK8S_SERVICE_NAME=video-processor[m
+ K8S_CLUSTER_NAME=video-cluster[m
+ [m
+ # ===========================================[m
+[31m-# 论坛集成配置 - 统一配置源[m
+[32m+[m[32m# 论坛集成配置[m
+ # ===========================================[m
+[32m+[m[32m# 🔧 基础配置[m
+[32m+[m[32m# FORUM_ENABLED - 启用论坛监控功能[m
+[32m+[m[32m# FORUM_CHECK_INTERVAL - 检查间隔（秒）[m
+ FORUM_ENABLED=true[m
+[31m-FORUM_CHECK_INTERVAL=10                                    # 统一为10秒高频监控[m
+[31m-FORUM_BASE_URL=https://tts.lrtcai.com[m
+[31m-FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html[m
+[31m-FORUM_USERNAME=AI剪辑助手                                   # 请修改为您的论坛用户名[m
+[31m-FORUM_PASSWORD=594188@lrtcai                               # 请修改为您的论坛密码[m
+[31m-FORUM_TARGET_FORUM_ID=2[m
+[32m+[m[32mFORUM_CHECK_INTERVAL=10[m
+[32m+[m
+[32m+[m[32m# 🌐 论坛账号配置[m
+[32m+[m[32m# 论坛地址在 config/forum_settings.yaml 中配置[m
+[32m+[m[32m# FORUM_USERNAME - 论坛用户名[m
+[32m+[m[32m# FORUM_PASSWORD - 论坛密码[m
+[32m+[m[32mFORUM_USERNAME=AI剪辑助手[m
+[32m+[m[32mFORUM_PASSWORD=your-password-here[m
+[32m+[m
+[32m+[m[32m# ⚙️ 功能配置[m
+ FORUM_AUTO_REPLY_ENABLED=true[m
+ FORUM_TEST_MODE=false[m
+ [m
+[1mdiff --git a/web_hub/aicut_forum_crawler.py b/web_hub/aicut_forum_crawler.py[m
+[1mindex 3c419dc..0627bf0 100644[m
+[1m--- a/web_hub/aicut_forum_crawler.py[m
+[1m+++ b/web_hub/aicut_forum_crawler.py[m
+[36m@@ -12,6 +12,7 @@[m
+ import os[m
+ import re[m
+ import json[m
+[32m+[m[32mimport sys[m
+ import time[m
+ import requests[m
+ from bs4 import BeautifulSoup[m
+[36m@@ -39,8 +40,8 @@[m [mclass AicutForumCrawler:[m
+         credentials_cfg = settings.get("credentials", {})[m
+ [m
+         # 允许外部参数或环境变量覆盖[m
+[31m-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get("base_url", "https://tts.lrtcai.com"))[m
+[31m-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))[m
+[32m+[m[32m        self.base_url = base_url or os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"][m
+[32m+[m[32m        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"][m
+ [m
+         self.username = ([m
+             username or[m
+[36m@@ -611,34 +612,38 @@[m [mclass AicutForumCrawler:[m
+         """提取封面信息 - 使用统一的up/down函数"""[m
+         cover_info = {}[m
+ [m
+[31m-        # 🎯 使用统一的封面标题提取函数[m
+[31m-        from pre.stage.unified_content_processor import extract_cover_title_up, extract_cover_title_middle, extract_cover_title_down[m
+[31m-[m
+[31m-        # 提取封面标题上、中、下[m
+[31m-        cover_title_up = extract_cover_title_up(content)[m
+[31m-        cover_title_middle = extract_cover_title_middle(content)[m
+[31m-        cover_title_down = extract_cover_title_down(content)[m
+[31m-[m
+[31m-        # 🎯 使用统一的up/middle/down字段名，只保存和显示有内容的标题[m
+[31m-        extracted_titles = [][m
+[31m-[m
+[31m-        if cover_title_up:[m
+[31m-            cover_info['cover_title_up'] = cover_title_up[m
+[31m-            extracted_titles.append(f"上标题: '{cover_title_up}'")[m
+[31m-[m
+[31m-        if cover_title_middle:[m
+[31m-            cover_info['cover_title_middle'] = cover_title_middle[m
+[31m-            extracted_titles.append(f"中标题: '{cover_title_middle}'")[m
+[31m-[m
+[31m-        if cover_title_down:[m
+[31m-            cover_info['cover_title_down'] = cover_title_down[m
+[31m-            extracted_titles.append(f"下标题: '{cover_title_down}'")[m
+[31m-[m
+[31m-        # 统一显示提取到的标题[m
+[31m-        if extracted_titles:[m
+[31m-            print("📝 提取到的封面标题:")[m
+[31m-            for title in extracted_titles:[m
+[31m-                print(f"   {title}")[m
+[32m+[m[32m        try:[m
+[32m+[m[32m            # 🎯 使用统一的封面标题提取函数（视频处理模块，TTS系统可选）[m
+[32m+[m[32m            from pre.stage.unified_content_processor import extract_cover_title_up, extract_cover_title_middle, extract_cover_title_down[m
+[32m+[m
+[32m+[m[32m            # 提取封面标题上、中、下[m
+[32m+[m[32m            cover_title_up = extract_cover_title_up(content)[m
+[32m+[m[32m            cover_title_middle = extract_cover_title_middle(content)[m
+[32m+[m[32m            cover_title_down = extract_cover_title_down(content)[m
+[32m+[m
+[32m+[m[32m            # 🎯 使用统一的up/middle/down字段名，只保存和显示有内容的标题[m
+[32m+[m[32m            extracted_titles = [][m
+[32m+[m
+[32m+[m[32m            if cover_title_up:[m
+[32m+[m[32m                cover_info['cover_title_up'] = cover_title_up[m
+[32m+[m[32m                extracted_titles.append(f"上标题: '{cover_title_up}'")[m
+[32m+[m
+[32m+[m[32m            if cover_title_middle:[m
+[32m+[m[32m                cover_info['cover_title_middle'] = cover_title_middle[m
+[32m+[m[32m                extracted_titles.append(f"中标题: '{cover_title_middle}'")[m
+[32m+[m
+[32m+[m[32m            if cover_title_down:[m
+[32m+[m[32m                cover_info['cover_title_down'] = cover_title_down[m
+[32m+[m[32m                extracted_titles.append(f"下标题: '{cover_title_down}'")[m
+[32m+[m
+[32m+[m[32m            # 统一显示提取到的标题[m
+[32m+[m[32m            if extracted_titles:[m
+[32m+[m[32m                print("📝 提取到的封面标题:")[m
+[32m+[m

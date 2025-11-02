@@ -5,8 +5,18 @@
 
 import os
 import sys
+import io
 from pathlib import Path
 from dotenv import load_dotenv
+
+# Fix Windows console encoding for emoji support
+if sys.platform == 'win32':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, io.UnsupportedOperation):
+        # If stdout/stderr don't have buffer attribute, skip
+        pass
 
 # 确保 shared 可导入
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -32,11 +42,11 @@ class MonitorConfig:
         forum_cfg = forum_settings.get('forum', {})
         credentials_cfg = forum_settings.get('credentials', {})
 
-        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', 'https://tts.lrtcai.com'))
-        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'))
+        self.FORUM_BASE_URL = os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"]
+        self.FORUM_TARGET_URL = os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"]
         self.FORUM_USERNAME = os.getenv('FORUM_USERNAME', os.getenv('AICUT_ADMIN_USERNAME', credentials_cfg.get('username', '')))
         self.FORUM_PASSWORD = os.getenv('FORUM_PASSWORD', os.getenv('AICUT_ADMIN_PASSWORD', credentials_cfg.get('password', '')))
-        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID', forum_cfg.get('forum_id', 2)))
+        self.FORUM_TARGET_FORUM_ID = int(os.getenv('FORUM_TARGET_FORUM_ID') or forum_cfg["forum_id"])
 
         # 论坛功能配置
         self.FORUM_AUTO_REPLY_ENABLED = os.getenv('FORUM_AUTO_REPLY_ENABLED', 'true').lower() == 'true'

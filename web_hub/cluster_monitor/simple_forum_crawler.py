@@ -35,8 +35,8 @@ class SimpleForumCrawler:
         forum_cfg = settings.get('forum', {})
         credentials_cfg = settings.get('credentials', {})
 
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', "https://tts.lrtcai.com"))
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', "https://tts.lrtcai.com/forum-2-1.html"))
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"]
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"]
         
         # 论坛账号信息
         self.username = (

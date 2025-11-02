@@ -28,17 +28,17 @@ class AicutLrtcaiConfig:
     
     # 网站基本信息 - 从环境变量读取，统一配置源
     site_name: str = "懒人同城号AI-智能剪口播"
-    site_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/")
+    site_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/")
     site_type: str = "discuz"
     site_version: str = "X3.5"
 
     # 论坛配置 - 从环境变量读取
-    forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php")
-    mobile_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("base_url", "https://tts.lrtcai.com") + "/forum.php?mobile=yes")
+    forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/forum.php")
+    mobile_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["base_url"] + "/forum.php?mobile=yes")
 
     # 目标监控板块 - 从环境变量读取
-    target_forum_id: int = field(default_factory=lambda: load_forum_settings()["forum"].get("forum_id", 2))
-    target_forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"].get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))
+    target_forum_id: int = field(default_factory=lambda: load_forum_settings()["forum"]["forum_id"])
+    target_forum_url: str = field(default_factory=lambda: load_forum_settings()["forum"]["target_url"])
     target_forum_name: str = "智能剪口播"
 
     # 登录配置 - 从环境变量读取

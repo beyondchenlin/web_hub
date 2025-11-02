@@ -99,8 +99,8 @@ class ForumIntegration:
                 # 获取论坛URL配置
                 settings = load_forum_settings()
                 forum_cfg = settings.get('forum', {})
-                base_url = os.getenv('FORUM_BASE_URL', forum_cfg.get('base_url', 'https://tts.lrtcai.com'))
-                forum_url = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url', 'https://tts.lrtcai.com/forum-2-1.html'))
+                base_url = os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"]
+                forum_url = os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"]
 
                 print(f"🌐 论坛配置: 基础URL={base_url}, 目标URL={forum_url}")
 

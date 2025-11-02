@@ -5,8 +5,18 @@
 
 import os
 import sys
+import io
 import time
 import argparse
+
+# Fix Windows console encoding for emoji support
+if sys.platform == 'win32':
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, io.UnsupportedOperation):
+        # If stdout/stderr don't have buffer attribute, skip
+        pass
 
 # 添加项目路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))

@@ -12,6 +12,7 @@
 import os
 import re
 import json
+import sys
 import time
 import requests
 from bs4 import BeautifulSoup
@@ -39,8 +40,8 @@ class AicutForumCrawler:
         credentials_cfg = settings.get("credentials", {})
 
         # 允许外部参数或环境变量覆盖
-        self.base_url = base_url or os.getenv('FORUM_BASE_URL', forum_cfg.get("base_url", "https://tts.lrtcai.com"))
-        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL', forum_cfg.get("target_url", "https://tts.lrtcai.com/forum-2-1.html"))
+        self.base_url = base_url or os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"]
+        self.forum_url = forum_url or os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"]
 
         self.username = (
             username or
@@ -611,34 +612,38 @@ class AicutForumCrawler:
         """提取封面信息 - 使用统一的up/down函数"""
         cover_info = {}
 
-        # 🎯 使用统一的封面标题提取函数
-        from pre.stage.unified_content_processor import extract_cover_title_up, extract_cover_title_middle, extract_cover_title_down
+        try:
+            # 🎯 使用统一的封面标题提取函数（视频处理模块，TTS系统可选）
+            from pre.stage.unified_content_processor import extract_cover_title_up, extract_cover_title_middle, extract_cover_title_down
 
-        # 提取封面标题上、中、下
-        cover_title_up = extract_cover_title_up(content)
-        cover_title_middle = extract_cover_title_middle(content)
-        cover_title_down = extract_cover_title_down(content)
+            # 提取封面标题上、中、下
+            cover_title_up = extract_cover_title_up(content)
+            cover_title_middle = extract_cover_title_middle(content)
+            cover_title_down = extract_cover_title_down(content)
 
-        # 🎯 使用统一的up/middle/down字段名，只保存和显示有内容的标题
-        extracted_titles = []
+            # 🎯 使用统一的up/middle/down字段名，只保存和显示有内容的标题
+            extracted_titles = []
 
-        if cover_title_up:
-            cover_info['cover_title_up'] = cover_title_up
-            extracted_titles.append(f"上标题: '{cover_title_up}'")
+            if cover_title_up:
+                cover_info['cover_title_up'] = cover_title_up
+                extracted_titles.append(f"上标题: '{cover_title_up}'")
 
-        if cover_title_middle:
-            cover_info['cover_title_middle'] = cover_title_middle
-            extracted_titles.append(f"中标题: '{cover_title_middle}'")
+            if cover_title_middle:
+                cover_info['cover_title_middle'] = cover_title_middle
+                extracted_titles.append(f"中标题: '{cover_title_middle}'")
 
-        if cover_title_down:
-            cover_info['cover_title_down'] = cover_title_down
-            extracted_titles.append(f"下标题: '{cover_title_down}'")
+            if cover_title_down:
+                cover_info['cover_title_down'] = cover_title_down
+                extracted_titles.append(f"下标题: '{cover_title_down}'")
 
-        # 统一显示提取到的标题
-        if extracted_titles:
-            print("📝 提取到的封面标题:")
-            for title in extracted_titles:
-                print(f"   {title}")
+            # 统一显示提取到的标题
+            if extracted_titles:
+                print("📝 提取到的封面标题:")
+                for title in extracted_titles:
+                    print(f"   {title}")
+        except ImportError:
+            # TTS系统不需要视频处理模块，跳过封面标题提取
+            pass
 
         return cover_info
 

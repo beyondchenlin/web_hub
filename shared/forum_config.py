@@ -71,7 +71,7 @@ def load_forum_settings(config_path: str | Path | None = None) -> Dict[str, Any]
     if "forum" not in config:
         config["forum"] = {}
     if "credentials" not in config:
-        config["credentials"] = {}
+        config["credentials"] = {}  # YAML中不应包含credentials，从.env读取
 
     config = _merge_env_overrides(config)
 

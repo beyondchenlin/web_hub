@@ -23,7 +23,7 @@ import logging
 
 from shared.forum_config import load_forum_settings
 from shared.task_model import TaskType
-from lightweight.queue_manager import QueueManager
+from web_hub.lightweight.queue_manager import QueueManager
 
 # 添加当前目录到路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
