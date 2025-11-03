@@ -78,6 +78,12 @@ class ForumConfigManager:
         """加载主论坛配置"""
         try:
             settings = load_forum_settings()
+
+            # 支持新的多论坛配置格式
+            if 'forums' in settings and 'main' in settings['forums']:
+                return self._load_forum_from_settings('main', settings)
+
+            # 兼容旧的单论坛配置格式
             forum_cfg = settings.get('forum', {})
             credentials_cfg = settings.get('credentials', {})
 
@@ -85,11 +91,11 @@ class ForumConfigManager:
             target_url = os.getenv('FORUM_TARGET_URL', forum_cfg.get('target_url'))
             username = os.getenv('FORUM_USERNAME', credentials_cfg.get('username'))
             password = os.getenv('FORUM_PASSWORD', credentials_cfg.get('password'))
-            
+
             if not all([base_url, target_url, username, password]):
                 print("⚠️ 主论坛配置不完整，跳过加载")
                 return None
-            
+
             return ForumConfig(
                 name=settings.get('forum', {}).get('name', "懒人同城号AI"),
                 base_url=base_url,
@@ -106,6 +112,59 @@ class ForumConfigManager:
         except Exception as e:
             print(f"⚠️ 加载主论坛配置失败: {e}")
             return None
+
+    def _load_forum_from_settings(self, forum_name: str, settings: dict) -> Optional[ForumConfig]:
+        """从settings中加载指定论坛配置"""
+        try:
+            forum_cfg = settings['forums'][forum_name]
+            credentials_cfg = forum_cfg.get('credentials', settings.get('credentials', {}))
+
+            base_url = forum_cfg.get('base_url')
+            target_url = forum_cfg.get('target_url')
+            username = credentials_cfg.get('username')
+            password = credentials_cfg.get('password')
+
+            if not all([base_url, target_url, username, password]):
+                print(f"⚠️ 论坛 {forum_name} 配置不完整，跳过加载")
+                return None
+
+            return ForumConfig(
+                name=forum_cfg.get('name', forum_name),
+                base_url=base_url,
+                target_url=target_url,
+                username=username,
+                password=password,
+                forum_id=forum_cfg.get('forum_id', 2),
+                enabled=forum_cfg.get('enabled', True),
+                check_interval=forum_cfg.get('check_interval', 10),
+                auto_reply=forum_cfg.get('auto_reply', True),
+                test_mode=forum_cfg.get('test_mode', False),
+                test_once=forum_cfg.get('test_once', False),
+            )
+        except Exception as e:
+            print(f"⚠️ 加载论坛 {forum_name} 配置失败: {e}")
+            return None
+
+    def load_all_forums_from_settings(self):
+        """从配置文件加载所有论坛"""
+        try:
+            settings = load_forum_settings()
+
+            # 支持新的多论坛配置格式
+            if 'forums' in settings:
+                for forum_name in settings['forums'].keys():
+                    config = self._load_forum_from_settings(forum_name, settings)
+                    if config:
+                        self.configs[forum_name] = config
+                        print(f"✅ 加载论坛配置: {config.name}")
+            else:
+                # 兼容旧格式
+                main_config = self._load_main_forum_config()
+                if main_config:
+                    self.configs['main'] = main_config
+                    print(f"✅ 加载主论坛配置: {main_config.name}")
+        except Exception as e:
+            print(f"⚠️ 加载论坛配置失败: {e}")
     
     def get_all_forum_configs(self) -> Dict[str, ForumConfig]:
         """获取所有论坛配置"""

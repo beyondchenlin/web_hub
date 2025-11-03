@@ -1,3 +1,40 @@
+# 全局凭证配置（所有论坛的默认凭证）
+credentials:
+  username: AI剪辑助手
+  password: 594188@lrtcai
+
+# 多论坛配置（推荐使用此格式）
+forums:
+  main:
+    name: 懒人同城号AI - TTS论坛
+    base_url: https://tts.lrtcai.com
+    target_url: https://tts.lrtcai.com/forum-2-1.html
+    forum_id: 2
+    enabled: true
+    check_interval: 10  # 检查间隔（秒）
+    auto_reply: true    # 是否自动回复
+    test_mode: false    # 测试模式
+    test_once: false    # 单次运行
+    # credentials:  # 可选：为此论坛指定特定凭证
+    #   username: 特定用户名
+    #   password: 特定密码
+
+  # 示例：添加第二个论坛
+  # forum2:
+  #   name: 另一个论坛
+  #   base_url: https://example.com
+  #   target_url: https://example.com/forum-1-1.html
+  #   forum_id: 1
+  #   enabled: true
+  #   check_interval: 15
+  #   auto_reply: true
+  #   test_mode: false
+  #   test_once: false
+  #   credentials:
+  #     username: 另一个用户名
+  #     password: 另一个密码
+
+# 兼容旧格式（单论坛配置）
 forum:
   base_url: https://tts.lrtcai.com
   target_url: https://tts.lrtcai.com/forum-2-1.html

@@ -29,11 +29,13 @@ class MultiForumCrawler:
     
     def __init__(self, config_file: str = ".env"):
         self.config_manager = ForumConfigManager(config_file)
+        # 从配置文件加载所有论坛
+        self.config_manager.load_all_forums_from_settings()
         self.crawlers: Dict[str, AicutForumCrawler] = {}
         self.running = False
         self.threads: Dict[str, threading.Thread] = {}
         self.stop_event = threading.Event()
-        
+
         # 初始化爬虫实例
         self._initialize_crawlers()
     
