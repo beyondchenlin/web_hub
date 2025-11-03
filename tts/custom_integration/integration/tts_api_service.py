@@ -348,20 +348,22 @@ class TTSAPIService:
             conn = sqlite3.connect(DATABASE_PATH)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
+
+            # 🔧 修复：使用 audio_path 而不是 audio_file（匹配数据库schema）
+            # 同时添加 file_path 字段（必填字段）
             cursor.execute("""
-                INSERT INTO voices (voice_id, voice_name, owner_id, is_public, 
-                                   description, duration, audio_file, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (voice_id, voice_name, user_id, is_public, description, 
-                  duration, audio_file, datetime.now().isoformat()))
-            
+                INSERT INTO voices (voice_id, voice_name, owner_id, is_public,
+                                   description, duration, audio_path, file_path, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (voice_id, voice_name, user_id, is_public, description,
+                  duration, audio_file, audio_file, datetime.now().isoformat()))
+
             conn.commit()
             conn.close()
-            
+
             logger.info(f"✅ 音色信息已保存: {voice_id}")
             return True
-        
+
         except Exception as e:
             logger.error(f"❌ 保存音色信息异常: {str(e)}")
             return False
