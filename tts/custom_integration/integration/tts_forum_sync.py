@@ -41,14 +41,14 @@ class TTSForumUserSync:
             raise
     
     def sync_forum_user(self, forum_user_id: str, forum_username: str,
-                       email: str = "") -> Tuple[bool, str]:
+                       email: str = None) -> Tuple[bool, str]:
         """
         同步论坛用户到TTS系统
 
         Args:
             forum_user_id: 论坛用户ID
             forum_username: 论坛用户名
-            email: 用户邮箱
+            email: 用户邮箱（可选）
 
         Returns:
             (是否成功, 消息)
@@ -60,6 +60,10 @@ class TTSForumUserSync:
             # 生成TTS系统用户ID
             tts_user_id = f"forum_{forum_user_id}"
 
+            # 如果没有提供email，生成一个默认的
+            if not email:
+                email = f"forum_{forum_user_id}@tts.local"
+
             # 检查用户是否已存在
             cursor.execute(
                 "SELECT user_id FROM users WHERE user_id = ?",
@@ -68,14 +72,13 @@ class TTSForumUserSync:
             existing_user = cursor.fetchone()
 
             if existing_user:
-                # 更新现有用户
+                # 更新现有用户（不更新email，避免冲突）
                 cursor.execute("""
                     UPDATE users
                     SET forum_username = ?,
-                        forum_sync_time = ?,
-                        email = ?
+                        forum_sync_time = ?
                     WHERE user_id = ?
-                """, (forum_username, datetime.now().isoformat(), email, tts_user_id))
+                """, (forum_username, datetime.now().isoformat(), tts_user_id))
 
                 logger.info(f"✅ 更新用户: {forum_username} (ID: {tts_user_id})")
                 message = f"用户已更新: {forum_username}"

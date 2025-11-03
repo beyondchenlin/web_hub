@@ -28,10 +28,21 @@ if str(REPO_ROOT) not in sys.path:
 
 from shared.forum_config import load_forum_settings
 
+# 尝试导入 Selenium（可选）
+try:
+    from selenium import webdriver
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support.ui import WebDriverWait
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.chrome.options import Options
+    SELENIUM_AVAILABLE = True
+except ImportError:
+    SELENIUM_AVAILABLE = False
+
 
 class AicutForumCrawler:
     """懒人同城号AI论坛爬虫 - 专门监控智能剪口播板块"""
-    
+
     def __init__(self, username: str = "", password: str = "", test_mode: bool = True, test_once: bool = False,
                  base_url: str = "", forum_url: str = ""):
         # 统一从配置文件加载默认设置
@@ -184,7 +195,7 @@ class AicutForumCrawler:
             print("📤 发送登录请求...")
             # 发送登录请求
             response = self.session.post(
-                f"{self.base_url}/member.php?mod=logging&action=login&loginsubmit=yes&infloat=yes&lssubmit=yes",
+                f"{self.base_url}/member.php?mod=logging&action=login&loginsubmit=yes&infloat=yes&lssubmit=yes&inajax=1",
                 data=login_data,
                 allow_redirects=True,
                 timeout=10

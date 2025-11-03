@@ -1,5 +1,5 @@
 """
-IndexTTS2 论坛集成系统
+IndexTTS2 Forum Integration System
 """
 
 __version__ = '1.0.0'

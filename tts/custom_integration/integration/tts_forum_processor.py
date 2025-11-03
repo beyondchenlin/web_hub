@@ -24,16 +24,21 @@ logger = logging.getLogger(__name__)
 class TTSForumProcessor:
     """TTS论坛请求处理器"""
     
-    def __init__(self, db_path: str = "database/tts_voice_system.db"):
+    def __init__(self, db_path: str = None):
         """
         初始化论坛处理器
 
         Args:
-            db_path: 数据库路径
+            db_path: 数据库路径，如果为None则使用配置文件中的路径
         """
+        if db_path is None:
+            from tts_config import DATABASE_PATH
+            db_path = str(DATABASE_PATH)
+
         self.db_path = db_path
         self.parser = TTSRequestParser()
         self.permission_manager = PermissionManager()
+        self.permission_manager.db_path = db_path  # 设置数据库路径
         self.user_sync = TTSForumUserSync(db_path)
     
     def process_forum_post(self, post_data: Dict) -> Tuple[bool, Dict]:

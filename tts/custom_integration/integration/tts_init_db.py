@@ -58,6 +58,9 @@ def init_database():
                 username VARCHAR(100) UNIQUE NOT NULL,
                 password_hash VARCHAR(255) NOT NULL,
                 email VARCHAR(255) UNIQUE,
+                forum_user_id VARCHAR(50),
+                forum_username VARCHAR(100),
+                forum_sync_time TIMESTAMP,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP,
                 voice_quota INTEGER DEFAULT 20,
@@ -116,6 +119,7 @@ def init_database():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_active ON users(is_active)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_forum_id ON users(forum_user_id)')
         
         # 音色表索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_voices_owner ON voices(owner_id)')

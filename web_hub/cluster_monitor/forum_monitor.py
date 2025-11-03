@@ -49,6 +49,7 @@ try:
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from aicut_forum_crawler import AicutForumCrawler
+    from shared.forum_crawler_manager import get_forum_crawler_manager
     FORUM_CRAWLER_AVAILABLE = True
     USE_FULL_CRAWLER = True
     print("✅ 完整版论坛爬虫模块导入成功")
@@ -149,17 +150,16 @@ class ForumMonitor:
                 if test_once:
                     print(f"   - 单次运行: ✅ 是")
 
-                # 🎯 关键修复：根据可用性选择论坛爬虫
+                # 🎯 使用 ForumCrawlerManager 获取爬虫实例
                 if USE_FULL_CRAWLER:
-                    print("📋 使用完整版论坛爬虫（支持封面标题提取）")
-                    self.forum_crawler = AicutForumCrawler(
-                        username=username,
-                        password=password,
-                        base_url=self.config.FORUM_BASE_URL,
-                        forum_url=self.config.FORUM_TARGET_URL,
-                        test_mode=test_mode,
-                        test_once=test_once
-                    )
+                    print("📋 使用 ForumCrawlerManager 获取论坛爬虫实例...")
+                    manager = get_forum_crawler_manager()
+                    self.forum_crawler = manager.get_crawler("main")
+
+                    if self.forum_crawler.logged_in:
+                        print("✅ 论坛爬虫已就绪（已登录）")
+                    else:
+                        print("⚠️ 论坛爬虫未登录，将在需要时自动登录")
                 else:
                     print("📋 使用简化版论坛爬虫（基础功能）")
                     self.forum_crawler = SimpleForumCrawler(
@@ -168,15 +168,15 @@ class ForumMonitor:
                         base_url=self.config.FORUM_BASE_URL,
                         forum_url=self.config.FORUM_TARGET_URL
                     )
-                print("✅ 论坛爬虫初始化成功")
+                    print("✅ 论坛爬虫初始化成功")
 
-                # 立即尝试登录
-                print("🔐 尝试登录论坛...")
-                login_success = self.forum_crawler.login()
-                if login_success:
-                    print("✅ 论坛登录成功")
-                else:
-                    print("⚠️ 论坛登录失败，将以游客模式运行")
+                    # 简化版爬虫需要手动登录
+                    print("🔐 尝试登录论坛...")
+                    login_success = self.forum_crawler.login()
+                    if login_success:
+                        print("✅ 论坛登录成功")
+                    else:
+                        print("⚠️ 论坛登录失败，将以游客模式运行")
 
             except Exception as e:
                 print(f"⚠️ 论坛爬虫初始化失败: {e}")

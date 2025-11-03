@@ -42,6 +42,7 @@ except ImportError:
 try:
     from aicut_forum_crawler import AicutForumCrawler
     from aicut_lrtcai_config import create_aicut_config
+    from shared.forum_crawler_manager import get_forum_crawler_manager
     FORUM_CRAWLER_AVAILABLE = True
 except ImportError:
     FORUM_CRAWLER_AVAILABLE = False
@@ -73,57 +74,29 @@ class ForumIntegration:
             except Exception as e:
                 self.logger.error(f"数据管理器初始化失败: {e}")
 
-        # 初始化论坛爬虫 - 支持集群工作节点模式
+        # 初始化论坛爬虫 - 使用 ForumCrawlerManager
         self.forum_crawler = None
         forum_parsing_enabled = getattr(config, 'forum_parsing_enabled', False)
         if FORUM_CRAWLER_AVAILABLE and (self.forum_enabled or forum_parsing_enabled):
             try:
-                # 从环境变量获取论坛账号信息 - 支持多种环境变量名
-                credentials = load_forum_settings().get('credentials', {})
-                username = (os.getenv('FORUM_USERNAME') or
-                           os.getenv('AICUT_ADMIN_USERNAME') or
-                           credentials.get('username', 'AI剪辑助手'))
-                password = (os.getenv('FORUM_PASSWORD') or
-                           os.getenv('AICUT_ADMIN_PASSWORD') or
-                           credentials.get('password', '594188@lrtcai'))
+                print(f"🔍 使用 ForumCrawlerManager 获取论坛爬虫实例...")
 
-                print(f"🔐 论坛登录信息: 用户名={username}, 密码={'*' * len(password) if password else '未设置'}")
+                # 使用 ForumCrawlerManager 获取爬虫实例
+                manager = get_forum_crawler_manager()
+                self.forum_crawler = manager.get_crawler("main")
 
-                # 获取测试模式配置
-                test_mode = getattr(config, 'forum_test_mode', True)
-                test_once = getattr(config, 'forum_test_once', False)
+                # Manager 会自动处理登录，检查登录状态
+                if self.forum_crawler.logged_in:
+                    print(f"✅ 论坛爬虫已就绪（已登录）")
+                    self.logger.info(f"论坛爬虫已就绪 - 使用 ForumCrawlerManager")
 
-                print(f"🔍 [DEBUG] 论坛模式配置: test_mode={test_mode}, test_once={test_once}")
-                print(f"🔍 [DEBUG] 环境变量FORUM_TEST_MODE: {os.getenv('FORUM_TEST_MODE', '未设置')}")
-
-                # 获取论坛URL配置
-                settings = load_forum_settings()
-                forum_cfg = settings.get('forum', {})
-                base_url = os.getenv('FORUM_BASE_URL') or forum_cfg["base_url"]
-                forum_url = os.getenv('FORUM_TARGET_URL') or forum_cfg["target_url"]
-
-                print(f"🌐 论坛配置: 基础URL={base_url}, 目标URL={forum_url}")
-
-                self.forum_crawler = AicutForumCrawler(username, password, test_mode, test_once, base_url, forum_url)
-
-                # 立即登录并验证
-                if self.forum_crawler:
-                    print(f"🔍 尝试登录论坛...")
-                    login_success = self.forum_crawler.login()
-                    if login_success:
-                        print(f"✅ 论坛登录成功: {username}")
-                        self.logger.info(f"论坛爬虫初始化成功 - 模式: {'测试' if test_mode else '生产'} - 登录成功: {username}")
-
-                        # 测试获取帖子列表
-                        print(f"🧪 测试获取帖子列表...")
-                        test_threads = self.forum_crawler.get_forum_threads()
-                        print(f"📊 测试结果: 发现 {len(test_threads)} 个帖子")
-
-                    else:
-                        print(f"❌ 论坛登录失败: {username}")
-                        self.logger.error(f"论坛爬虫初始化成功但登录失败: {username}")
+                    # 测试获取帖子列表
+                    print(f"🧪 测试获取帖子列表...")
+                    test_threads = self.forum_crawler.get_forum_threads()
+                    print(f"📊 测试结果: 发现 {len(test_threads)} 个帖子")
                 else:
-                    self.logger.info(f"论坛爬虫初始化成功 - 模式: {'测试' if test_mode else '生产'}")
+                    print(f"⚠️ 论坛爬虫未登录，将在需要时自动登录")
+                    self.logger.warning(f"论坛爬虫未登录状态")
             except Exception as e:
                 print(f"❌ 论坛爬虫初始化异常: {e}")
                 self.logger.error(f"论坛爬虫初始化失败: {e}")
@@ -346,12 +319,12 @@ class ForumIntegration:
                     'original_filenames': original_filenames
                 }
 
-                # 只添加有视频链接的帖子
+                # 添加所有帖子（包括TTS请求，它们可能没有视频链接）
+                formatted_posts.append(formatted_post)
                 if video_urls or primary_video_url:
-                    formatted_posts.append(formatted_post)
-                    print(f"✅ 添加帖子到处理队列: {post['thread_id']}")
+                    print(f"✅ 添加视频帖子到处理队列: {post['thread_id']}")
                 else:
-                    print(f"⏭️ 跳过无视频链接的帖子: {post['thread_id']}")
+                    print(f"✅ 添加帖子到处理队列（可能是TTS请求）: {post['thread_id']}")
 
             print(f"📊 最终格式化帖子数量: {len(formatted_posts)}")
             return formatted_posts
@@ -363,16 +336,60 @@ class ForumIntegration:
             traceback.print_exc()
             return []
     
+    def _detect_task_type(self, post: Dict[str, Any]) -> 'TaskType':
+        """检测帖子的任务类型"""
+        from shared.task_model import TaskType
+
+        title = (post.get('title') or '').lower()
+        content = (post.get('content') or '').lower()
+
+        # 音色克隆关键词
+        clone_keywords = [
+            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音',
+            '语音克隆', '【音色克隆】'
+        ]
+        # TTS合成关键词
+        tts_keywords = [
+            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成',
+            '制作ai声音', 'ai声音', '【制作ai声音】'
+        ]
+
+        # 检查是否为音色克隆请求
+        if any(keyword in title or keyword in content for keyword in clone_keywords):
+            return TaskType.VOICE_CLONE
+
+        # 检查是否为TTS合成请求
+        if any(keyword in title or keyword in content for keyword in tts_keywords):
+            return TaskType.TTS
+
+        # 默认为视频处理
+        return TaskType.VIDEO
+
     def _process_new_post(self, post: Dict[str, Any]):
         """处理新帖子"""
         try:
+            from shared.task_model import TaskType, TaskPriority
+
             post_id = post['post_id']
             video_urls = post.get('video_urls', [])
             video_url = post.get('video_url')
 
-            # 确保有视频链接
+            # 检测任务类型
+            task_type = self._detect_task_type(post)
+
+            # 对于TTS和音色克隆任务，不需要视频链接
+            if task_type in [TaskType.TTS, TaskType.VOICE_CLONE]:
+                print(f"🎤 检测到{task_type.value}请求: {post.get('title', '无标题')}")
+                self.logger.info(f"检测到{task_type.value}请求: {post_id}")
+
+                # 创建TTS/音色克隆任务
+                self._create_tts_task(post, task_type)
+                return
+
+            # 对于视频任务，需要视频链接
             if not video_urls and not video_url:
-                self.logger.warning(f"帖子 {post_id} 没有视频链接")
+                self.logger.warning(f"帖子 {post_id} 没有视频链接，跳过")
+                print(f"⏭️ 跳过无视频链接的帖子: {post_id}")
                 return
 
             # 使用第一个视频链接作为主要处理对象
@@ -451,7 +468,68 @@ class ForumIntegration:
 
         except Exception as e:
             self.logger.error(f"处理新帖子失败: {e}")
-    
+
+    def _create_tts_task(self, post: Dict[str, Any], task_type: 'TaskType'):
+        """创建TTS或音色克隆任务"""
+        try:
+            from shared.task_model import TaskPriority
+
+            post_id = post['post_id']
+            thread_id = post.get('thread_id', post_id)
+
+            print(f"🎵 创建{task_type.value}任务...")
+            self.logger.info(f"创建{task_type.value}任务: {post_id}")
+
+            # 准备任务payload（TTS特定数据）
+            payload = {
+                'thread_id': thread_id,
+                'post_id': post_id,
+                'title': post.get('title', ''),
+                'content': post.get('content', ''),
+                'author_id': post.get('author_id', ''),
+                'author_name': post.get('author_name', ''),
+                'audio_urls': post.get('audio_urls', []),
+                'video_urls': post.get('video_urls', []),
+                'post_url': post.get('post_url', ''),
+            }
+
+            # 准备任务元数据
+            task_metadata = {
+                'post_id': post_id,
+                'thread_id': thread_id,
+                'author_id': post.get('author_id'),
+                'author_name': post.get('author_name'),
+                'title': post.get('title'),
+                'post_url': post.get('post_url'),
+                'source': 'forum',
+                'task_type': task_type.value,
+            }
+
+            # 创建任务（不需要source_url，因为TTS任务不需要下载）
+            task_id = self.queue_manager.create_task(
+                source_url=None,  # TTS任务不需要下载
+                priority=TaskPriority.NORMAL,
+                metadata=task_metadata,
+                payload=payload,
+                task_type=task_type
+            )
+
+            print(f"✅ {task_type.value}任务已创建: {task_id}")
+            self.logger.info(f"{task_type.value}任务已创建: {task_id}")
+
+            # 更新数据库状态
+            if self.data_manager:
+                self.data_manager.update_post_status(
+                    post_id,
+                    'processing',
+                    task_id=task_id
+                )
+
+        except Exception as e:
+            self.logger.error(f"创建{task_type.value}任务失败: {e}")
+            import traceback
+            traceback.print_exc()
+
     def create_forum_task(self, post_id: str, video_url: str,
                          author_id: str = None, title: str = None,
                          original_filename: str = None) -> str:
@@ -682,25 +760,18 @@ class ForumReplyBot:
             except Exception as e:
                 self.logger.error(f"数据管理器初始化失败: {e}")
 
-        # 初始化论坛爬虫
+        # 初始化论坛爬虫 - 使用 ForumCrawlerManager
         self.forum_crawler = None
         if FORUM_CRAWLER_AVAILABLE:
             try:
-                # 统一从环境变量读取论坛账号信息
-                credentials = load_forum_settings().get('credentials', {})
-                username = os.getenv('FORUM_USERNAME') or os.getenv('AICUT_ADMIN_USERNAME', credentials.get('username', ''))
-                password = os.getenv('FORUM_PASSWORD') or os.getenv('AICUT_ADMIN_PASSWORD', credentials.get('password', ''))
-                # 获取测试模式配置
-                test_mode = getattr(config, 'forum_test_mode', True)
-                test_once = getattr(config, 'forum_test_once', False)
-                self.forum_crawler = AicutForumCrawler(username, password, test_mode, test_once)
-                # 立即登录
-                if self.forum_crawler:
-                    login_success = self.forum_crawler.login()
-                    if login_success:
-                        self.logger.info(f"论坛登录成功: {username} - 模式: {'测试' if test_mode else '生产'}")
-                    else:
-                        self.logger.error(f"论坛登录失败: {username}")
+                # 使用 ForumCrawlerManager 获取爬虫实例
+                manager = get_forum_crawler_manager()
+                self.forum_crawler = manager.get_crawler("main")
+
+                if self.forum_crawler.logged_in:
+                    self.logger.info(f"论坛爬虫已就绪（ForumReplyBot）")
+                else:
+                    self.logger.warning(f"论坛爬虫未登录，将在需要时自动登录")
             except Exception as e:
                 self.logger.error(f"论坛爬虫初始化失败: {e}")
 
