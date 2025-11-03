@@ -12,7 +12,10 @@ import logging
 from typing import Dict, Optional
 
 # 添加项目路径
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)  # 项目根目录
+sys.path.insert(0, current_dir)  # web_hub目录
+sys.path.insert(0, project_root)  # 项目根目录（包含shared）
 
 # 导入轻量级系统模块
 from lightweight.config import get_config_manager, get_config

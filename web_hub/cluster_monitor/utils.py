@@ -233,10 +233,14 @@ if __name__ == "__main__":
     app.run(host="0.0.0.0", port=port, debug=False)
 '''
 
-    with open("wsgi.py", "w", encoding="utf-8") as f:
+    # 🔧 修复：在当前脚本所在目录创建wsgi.py，而不是工作目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    wsgi_path = os.path.join(current_dir, "wsgi.py")
+
+    with open(wsgi_path, "w", encoding="utf-8") as f:
         f.write(wsgi_content)
 
-    print("✅ WSGI入口文件已创建: wsgi.py")
+    print(f"✅ WSGI入口文件已创建: {wsgi_path}")
 
 
 def create_gunicorn_config(port: int, workers: int = 4):
@@ -275,7 +279,11 @@ limit_request_fields = 100
 limit_request_field_size = 8190
 """
 
-    with open("gunicorn.conf.py", "w", encoding="utf-8") as f:
+    # 🔧 修复：在当前脚本所在目录创建配置文件，而不是工作目录
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(current_dir, "gunicorn.conf.py")
+
+    with open(config_path, "w", encoding="utf-8") as f:
         f.write(config_content)
 
-    print("✅ Gunicorn配置文件已创建: gunicorn.conf.py")
+    print(f"✅ Gunicorn配置文件已创建: {config_path}")

@@ -13,6 +13,8 @@
 
 import json
 import os
+import sys
+import platform
 import threading
 from datetime import datetime
 from typing import Dict, Any, Optional
@@ -22,6 +24,20 @@ try:
     FLASK_AVAILABLE = True
 except ImportError:
     FLASK_AVAILABLE = False
+
+# 检查Waitress是否可用（Windows推荐）
+try:
+    import waitress
+    WAITRESS_AVAILABLE = True
+except ImportError:
+    WAITRESS_AVAILABLE = False
+
+# 检查Gunicorn是否可用（Unix推荐）
+try:
+    import gunicorn
+    GUNICORN_AVAILABLE = True
+except ImportError:
+    GUNICORN_AVAILABLE = False
 
 from .queue_manager import QueueManager, TaskPriority
 from .resource_monitor import LightweightResourceMonitor
@@ -946,7 +962,7 @@ class WebServer:
         """启动Web服务器"""
         if self.running:
             return
-        
+
         self.running = True
         self.server_thread = threading.Thread(
             target=self._run_server,
@@ -954,22 +970,74 @@ class WebServer:
         )
         self.server_thread.start()
         self.logger.info(f"Web服务器已启动: http://{self.config.web_host}:{self.config.web_port}")
-    
+
     def stop(self):
         """停止Web服务器"""
         self.running = False
         self.logger.info("Web服务器已停止")
-    
+
     def _run_server(self):
-        """运行服务器"""
+        """运行服务器 - 优先使用生产级WSGI服务器"""
         try:
-            self.app.run(
-                host=self.config.web_host,
-                port=self.config.web_port,
-                debug=self.config.web_debug,
-                use_reloader=False,
-                threaded=True
-            )
+            # 检查是否强制使用开发服务器
+            use_dev_server = getattr(self.config, 'use_dev_server', False)
+
+            if use_dev_server:
+                # 开发模式：使用Flask内置服务器
+                self.logger.info("🔧 使用Flask开发服务器")
+                self.app.run(
+                    host=self.config.web_host,
+                    port=self.config.web_port,
+                    debug=self.config.web_debug,
+                    use_reloader=False,
+                    threaded=True
+                )
+            else:
+                # 生产模式：优先使用Waitress（Windows）或Gunicorn（Unix）
+                is_windows = platform.system().lower() == 'windows'
+
+                if is_windows and WAITRESS_AVAILABLE:
+                    # Windows系统使用Waitress
+                    self.logger.info("🚀 使用Waitress生产服务器（Windows推荐）")
+                    print(f"🚀 使用Waitress生产服务器")
+                    waitress.serve(
+                        self.app,
+                        host=self.config.web_host,
+                        port=self.config.web_port,
+                        threads=4,
+                        channel_timeout=30,
+                        cleanup_interval=10,
+                        _quiet=False
+                    )
+                elif not is_windows and GUNICORN_AVAILABLE:
+                    # Unix系统使用Gunicorn（需要特殊处理，这里暂时回退到Flask）
+                    self.logger.warning("⚠️ Gunicorn需要通过命令行启动，使用Flask服务器")
+                    print("⚠️ Gunicorn需要通过命令行启动，使用Flask服务器")
+                    self.app.run(
+                        host=self.config.web_host,
+                        port=self.config.web_port,
+                        debug=False,
+                        use_reloader=False,
+                        threaded=True
+                    )
+                else:
+                    # 回退到Flask开发服务器
+                    if is_windows:
+                        self.logger.warning("⚠️ Waitress未安装，使用Flask开发服务器")
+                        print("⚠️ Waitress未安装，使用Flask开发服务器")
+                        print("💡 建议安装: pip install waitress")
+                    else:
+                        self.logger.warning("⚠️ Gunicorn未安装，使用Flask开发服务器")
+                        print("⚠️ Gunicorn未安装，使用Flask开发服务器")
+                        print("💡 建议安装: pip install gunicorn")
+
+                    self.app.run(
+                        host=self.config.web_host,
+                        port=self.config.web_port,
+                        debug=False,
+                        use_reloader=False,
+                        threaded=True
+                    )
         except Exception as e:
             self.logger.error(f"Web服务器运行错误: {e}")
             self.running = False
