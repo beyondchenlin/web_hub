@@ -76,14 +76,15 @@ class ForumIntegration:
 
         # 初始化论坛爬虫 - 使用 ForumCrawlerManager
         self.forum_crawler = None
+        self.forum_crawler_manager = None  # 保存 manager 引用
         forum_parsing_enabled = getattr(config, 'forum_parsing_enabled', False)
         if FORUM_CRAWLER_AVAILABLE and (self.forum_enabled or forum_parsing_enabled):
             try:
                 print(f"🔍 使用 ForumCrawlerManager 获取论坛爬虫实例...")
 
                 # 使用 ForumCrawlerManager 获取爬虫实例
-                manager = get_forum_crawler_manager()
-                self.forum_crawler = manager.get_crawler("main")
+                self.forum_crawler_manager = get_forum_crawler_manager()
+                self.forum_crawler = self.forum_crawler_manager.get_crawler("main")
 
                 # Manager 会自动处理登录，检查登录状态
                 if self.forum_crawler.logged_in:
@@ -275,8 +276,15 @@ class ForumIntegration:
 
         try:
             print("🕷️ 调用论坛爬虫监控新帖...")
-            # 使用论坛爬虫监控新帖
-            new_posts = self.forum_crawler.monitor_new_posts()
+            # 🔧 关键修复：通过 ForumCrawlerManager 调用，确保自动登录
+            if self.forum_crawler_manager:
+                new_posts = self.forum_crawler_manager.monitor_new_posts("main")
+            else:
+                # 备用：直接调用（但需要手动确保登录）
+                if not self.forum_crawler.logged_in:
+                    print("🔐 论坛未登录，尝试登录...")
+                    self.forum_crawler.login()
+                new_posts = self.forum_crawler.monitor_new_posts()
             print(f"🕷️ 论坛爬虫返回 {len(new_posts)} 个原始帖子")
 
             if not new_posts:

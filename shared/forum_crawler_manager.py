@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -67,11 +68,21 @@ class ForumCrawlerManager:
         credentials = config.get("credentials", {})
         defaults = self._settings.get("credentials", {})
 
+        # 🔧 关键修复：从环境变量读取测试模式配置（优先级最高）
+        test_mode = os.getenv('FORUM_TEST_MODE', 'false').lower() == 'true'
+        test_once = os.getenv('FORUM_TEST_ONCE', 'false').lower() == 'true'
+
+        # 如果环境变量未设置，则从配置文件读取
+        if 'FORUM_TEST_MODE' not in os.environ:
+            test_mode = config.get("test_mode", False)
+        if 'FORUM_TEST_ONCE' not in os.environ:
+            test_once = config.get("test_once", False)
+
         crawler = AicutForumCrawler(
             username=credentials.get("username") or defaults.get("username", ""),
             password=credentials.get("password") or defaults.get("password", ""),
-            test_mode=config.get("test_mode", False),
-            test_once=config.get("test_once", False),
+            test_mode=test_mode,
+            test_once=test_once,
             base_url=config.get("base_url", ""),
             forum_url=config.get("target_url", ""),
         )
@@ -89,8 +100,19 @@ class ForumCrawlerManager:
         return forum_cfg
 
     def _ensure_logged_in(self, crawler: AicutForumCrawler) -> None:
+        """确保爬虫已登录，避免重复登录"""
+        # 检查是否已登录
         if getattr(crawler, "logged_in", False):
             return
+
+        # 检查session中是否有有效的登录cookie
+        if hasattr(crawler, 'session') and crawler.session:
+            if any(cookie.name in ['cdb_sid', 'cdb_auth'] for cookie in crawler.session.cookies):
+                # 有登录cookie，标记为已登录
+                crawler.logged_in = True
+                return
+
+        # 未登录，执行登录
         crawler.login()
 
 

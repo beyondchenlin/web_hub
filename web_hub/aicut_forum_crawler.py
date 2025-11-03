@@ -203,23 +203,41 @@ class AicutForumCrawler:
 
             print(f"📥 登录响应状态码: {response.status_code}")
 
-            # 检查登录是否成功
+            # 🔧 关键修复：检查登录是否成功
             response_text = response.text
-            if ('登录成功' in response_text or
-                'AI剪辑助手' in response_text or
+
+            # 检查是否有明确的错误信息
+            if '密码错误' in response_text:
+                print("❌ 登录失败：密码错误")
+                return False
+            elif '用户名不存在' in response_text:
+                print("❌ 登录失败：用户名不存在")
+                return False
+            elif response.status_code == 503:
+                print("⚠️ 服务器限流（503），但可能已登录")
+                # 检查cookies判断是否已登录
+                if any(cookie.name in ['cdb_sid', 'cdb_auth'] for cookie in self.session.cookies):
+                    self.logged_in = True
+                    print("✅ 检测到登录cookie，登录成功")
+                    return True
+                return False
+
+            # 检查登录成功的标志
+            # 1. 重定向脚本（Discuz常见的登录成功响应）
+            # 2. 包含用户名
+            # 3. 包含登录成功提示
+            # 4. 检查cookie
+            if ('window.location.href' in response_text or  # 重定向脚本
+                'reload="1"' in response_text or  # 重载标志
+                '登录成功' in response_text or
                 self.username in response_text or
-                'ucenter_user' in response_text):  # 检查cookie设置
+                any(cookie.name in ['cdb_sid', 'cdb_auth'] for cookie in self.session.cookies)):
                 self.logged_in = True
                 print("✅ 登录成功")
                 return True
             else:
-                print("❌ 登录失败")
+                print("❌ 登录失败：未检测到登录成功标志")
                 print(f"响应内容前200字符: {response_text[:200]}...")
-                # 检查是否有错误信息
-                if '密码错误' in response_text:
-                    print("❌ 密码错误")
-                elif '用户名不存在' in response_text:
-                    print("❌ 用户名不存在")
                 return False
 
         except Exception as e:
