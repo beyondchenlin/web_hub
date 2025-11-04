@@ -16,6 +16,7 @@ from pathlib import Path
 from enum import Enum
 import threading
 import queue
+import shutil
 
 # 导入配置
 from tts_config import (
@@ -306,21 +307,180 @@ class TTSAPIService:
 
     def _call_voice_clone_api(self, audio_file: str, voice_name: str,
                               user_id: str) -> Optional[str]:
-        """调用音色克隆API"""
-        try:
-            logger.info(f"📡 调用音色克隆API: {voice_name}")
+        """
+        调用音色克隆API - 真实实现
 
-            # 这里需要根据实际的音色克隆API实现
-            # 暂时返回生成的voice_id
+        Args:
+            audio_file: 音频文件路径
+            voice_name: 音色名称
+            user_id: 用户ID
+
+        Returns:
+            voice_id: 成功返回音色ID，失败返回None
+        """
+        try:
+            logger.info(f"📡 开始音色克隆: {voice_name}")
+            logger.info(f"   音频文件: {audio_file}")
+            logger.info(f"   用户ID: {user_id}")
+
+            # 验证音频文件
+            if not os.path.exists(audio_file):
+                logger.error(f"❌ 音频文件不存在: {audio_file}")
+                return None
+
+            # 生成唯一的音色ID
             voice_id = f"user_{user_id}_{voice_name}_{int(time.time())}"
 
-            logger.info(f"✅ 音色克隆API调用成功: {voice_id}")
-            return voice_id
+            # 方案1: 尝试调用 IndexTTS2 的 /create_voice API
+            try:
+                create_voice_url = f"{self.api_url}/create_voice"
+                logger.info(f"📡 尝试调用API: {create_voice_url}")
+
+                with open(audio_file, 'rb') as f:
+                    files = {'audio': (os.path.basename(audio_file), f, 'audio/wav')}
+                    data = {'voice_name': voice_id}
+
+                    response = requests.post(
+                        create_voice_url,
+                        files=files,
+                        data=data,
+                        timeout=60
+                    )
+
+                if response.status_code == 200:
+                    logger.info(f"✅ API创建音色成功: {voice_id}")
+                    result = response.json()
+                    logger.info(f"   API响应: {result}")
+                    return voice_id
+                elif response.status_code == 404:
+                    logger.warning(f"⚠️ API接口不存在，使用本地备用方案")
+                else:
+                    logger.warning(f"⚠️ API返回错误 ({response.status_code})，使用本地备用方案")
+
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"⚠️ API连接失败，使用本地备用方案")
+            except requests.exceptions.Timeout:
+                logger.warning(f"⚠️ API请求超时，使用本地备用方案")
+            except Exception as e:
+                logger.warning(f"⚠️ API调用异常: {str(e)}，使用本地备用方案")
+
+            # 方案2: 本地备用方案（参考 batch_processor.py 的实现）
+            success = self._create_voice_fallback(audio_file, voice_id, user_id)
+
+            if success:
+                logger.info(f"✅ 本地方案创建音色成功: {voice_id}")
+                return voice_id
+            else:
+                logger.error(f"❌ 本地方案创建音色失败")
+                return None
 
         except Exception as e:
-            logger.error(f"❌ 音色克隆API调用异常: {str(e)}")
+            logger.error(f"❌ 音色克隆异常: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
             return None
-    
+
+    def _create_voice_fallback(self, audio_file: str, voice_id: str, user_id: str) -> bool:
+        """
+        本地备用方案：创建音色文件
+        参考 batch_processor.py 的 create_voice_fallback 实现
+
+        Args:
+            audio_file: 音频文件路径
+            voice_id: 音色ID
+            user_id: 用户ID
+
+        Returns:
+            bool: 成功返回True，失败返回False
+        """
+        try:
+            logger.info(f"🔧 使用本地备用方案创建音色: {voice_id}")
+
+            # 检查是否有 librosa 和 soundfile
+            try:
+                import librosa
+                import soundfile as sf
+                import torch
+            except ImportError as e:
+                logger.error(f"❌ 缺少必要的库: {e}")
+                logger.error("请安装: pip install librosa soundfile torch")
+                return False
+
+            # 确定 IndexTTS2 的 voices 目录
+            # 假设 IndexTTS2 在 tts/indextts2/ 目录
+            repo_root = Path(__file__).resolve().parents[3]
+            indextts2_root = repo_root / "tts" / "indextts2"
+
+            if not indextts2_root.exists():
+                logger.error(f"❌ IndexTTS2 目录不存在: {indextts2_root}")
+                return False
+
+            voices_dir = indextts2_root / "voices"
+            voices_dir.mkdir(parents=True, exist_ok=True)
+
+            # 创建音频存储目录
+            audio_storage_dir = voices_dir / "audio"
+            audio_storage_dir.mkdir(parents=True, exist_ok=True)
+
+            # 用户专属目录
+            user_audio_dir = audio_storage_dir / user_id
+            user_audio_dir.mkdir(parents=True, exist_ok=True)
+
+            # 目标文件路径
+            target_audio_filename = f"{voice_id}.wav"
+            target_audio_path = user_audio_dir / target_audio_filename
+            target_pt_path = voices_dir / f"{voice_id}.pt"
+
+            logger.info(f"   音频目标路径: {target_audio_path}")
+            logger.info(f"   .pt目标路径: {target_pt_path}")
+
+            # 加载并标准化音频（22050 Hz）
+            logger.info(f"   正在处理音频文件...")
+            audio, sr = librosa.load(audio_file, sr=22050)
+            duration = len(audio) / sr
+            logger.info(f"   音频时长: {duration:.2f}秒，采样率: {sr}Hz")
+
+            # 保存标准化后的音频
+            sf.write(str(target_audio_path), audio, sr, subtype='PCM_16')
+            logger.info(f"   ✓ 音频已保存")
+
+            # 创建相对路径（相对于 IndexTTS2 根目录）
+            relative_audio_path = f"voices/audio/{user_id}/{target_audio_filename}"
+            # 使用正斜杠以保证跨平台兼容性
+            relative_audio_path = relative_audio_path.replace('\\', '/')
+
+            # 按照 IndexTTS2 的格式创建 .pt 文件
+            # 格式：{'audio': '音频文件路径'}
+            voice_data = {
+                'audio': relative_audio_path
+            }
+
+            # 保存为 .pt 文件
+            torch.save(voice_data, str(target_pt_path))
+            logger.info(f"   ✓ 音色配置已保存")
+
+            # 验证文件是否创建成功
+            if target_pt_path.exists() and target_audio_path.exists():
+                pt_size = target_pt_path.stat().st_size / 1024
+                audio_size = target_audio_path.stat().st_size / 1024
+
+                logger.info(f"✅ 音色创建成功:")
+                logger.info(f"   - 音色文件: {target_pt_path.name} ({pt_size:.2f} KB)")
+                logger.info(f"   - 音频文件: {relative_audio_path} ({audio_size:.2f} KB)")
+                logger.info(f"   - 采样率: {sr} Hz")
+                logger.info(f"   - 音频时长: {duration:.2f} 秒")
+
+                return True
+            else:
+                logger.error(f"❌ 文件创建失败")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ 本地创建失败: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
     def _save_tts_output(self, request_id: str, user_id: str,
                          audio_data: bytes) -> Optional[str]:
         """保存TTS输出"""
