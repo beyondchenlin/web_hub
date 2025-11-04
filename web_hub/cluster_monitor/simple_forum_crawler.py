@@ -201,8 +201,21 @@ class SimpleForumCrawler:
 
             for i, row in enumerate(thread_rows, 1):
                 try:
-                    # 查找帖子链接
-                    thread_link = row.find('a', href=lambda x: x and 'thread-' in x)
+                    # 查找帖子链接 - 优先查找带标题的链接（class="xst"）
+                    thread_link = row.find('a', class_='xst', href=lambda x: x and 'thread-' in x)
+
+                    # 如果没找到，查找所有thread链接，选择有文本的
+                    if not thread_link:
+                        all_thread_links = row.find_all('a', href=lambda x: x and 'thread-' in x)
+                        for link in all_thread_links:
+                            if link.get_text(strip=True):
+                                thread_link = link
+                                break
+
+                    # 如果还是没找到，使用第一个thread链接
+                    if not thread_link:
+                        thread_link = row.find('a', href=lambda x: x and 'thread-' in x)
+
                     if not thread_link:
                         continue
 
@@ -223,6 +236,17 @@ class SimpleForumCrawler:
 
                     # 获取帖子标题
                     title = thread_link.get_text(strip=True)
+
+                    # 如果标题为空，尝试从其他thread链接获取
+                    if not title or title in ['', ' ']:
+                        all_thread_links = row.find_all('a', href=lambda x: x and 'thread-' in x)
+                        for link in all_thread_links:
+                            link_text = link.get_text(strip=True)
+                            if link_text and link_text not in ['', ' ']:
+                                title = link_text
+                                break
+
+                    # 如果还是没有标题，使用默认值
                     if not title or title in ['', ' ']:
                         title = f"帖子{thread_id}"
 

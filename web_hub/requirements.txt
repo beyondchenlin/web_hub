@@ -1,50 +1,50 @@
-# web_hub 子项目依赖清单（基于代码遍历）
+# web_hub 子项目依赖清单（根据实际代码 import 自动汇总）
 # Python 3.10+
 
-# ==================== 核心依赖（代码中直接 import） ====================
-# 网络请求与解析
-requests>=2.31.0,<3.0.0
-urllib3>=2.0.0,<3.0.0
-beautifulsoup4>=4.12.0,<5.0.0
+# ==================== 核心依赖（扫描到的三方库） ====================
+# 网络请求 / HTML 解析
+requests>=2.31.0,<3.0.0        # aicut_forum_crawler.py, cluster_monitor/*
+urllib3>=2.0.0,<3.0.0          # aicut_forum_crawler.py, cluster_monitor/simple_forum_crawler.py
+beautifulsoup4>=4.12.0,<5.0.0  # bs4：论坛页面解析
 
 # Web 服务
-Flask>=2.3.3,<4.0.0
-Jinja2>=3.0.0,<4.0.0
+Flask>=2.3.3,<4.0.0            # cluster_monitor/forum_monitor.py, lightweight/web_server.py
+Jinja2>=3.0.0,<4.0.0           # lightweight/report_generator.py
+Werkzeug>=3.0.0,<4.0.0         # cluster_monitor/forum_monitor.py
 
 # 配置与序列化
-python-dotenv>=1.0.0,<2.0.0
-PyYAML>=6.0.0,<7.0.0
+python-dotenv>=1.0.0,<2.0.0    # lightweight/config.py
+PyYAML>=6.0.0,<7.0.0           # lightweight/config.py
 
-# 数据存储与队列
-redis>=5.0.0,<6.0.0
+# 数据存储 / 队列
+redis>=5.0.0,<6.0.0            # forum_data_manager.py, queue/resource manager
 
 # 系统监控
-psutil>=5.8.0,<8.0.0
-GPUtil>=1.4.0,<2.0.0
+psutil>=5.8.0,<8.0.0           # lightweight/resource_monitor.py
+GPUtil>=1.4.0,<2.0.0           # lightweight/performance_tracker.py
 
 
-# ==================== 可选依赖（按需安装） ====================
-# 浏览器自动化（aicut_forum_crawler 支持 Selenium 登录）
-# selenium>=4.10.0,<5.0.0
+# ==================== 可选依赖（按需安装，扫描中出现但可选） ====================
+# 浏览器自动化（论坛登录）
+# selenium>=4.10.0,<5.0.0      # aicut_forum_crawler.py
 
-# 浏览器自动化（仅 archived/browser_mcp_server.py 使用）
-# mcp>=0.9.0,<1.0.0
+# Playwright + MCP（仅 archived/browser_mcp_server.py）
 # playwright>=1.40.0,<2.0.0
+# mcp>=0.9.0,<1.0.0
 
-# HTML 解析加速（BeautifulSoup 可选解析器）
+# WSGI/部署
+# waitress>=2.1.2,<3.0.0       # start_lightweight.py / cluster_monitor/*
+# gunicorn>=21.2.0,<22.0.0     # lightweight/web_server.py
+
+# 解析器 / Redis 优化
 # lxml>=4.9.0,<5.0.0
-
-# Redis 性能优化（可选）
 # hiredis>=2.2.0,<3.0.0
 
-# 生产级 WSGI（可选）
-# waitress>=2.1.2,<3.0.0
-
-# GPU 监控增强（当前代码使用 nvidia-smi/GPUtil，可不装）
+# GPU 工具增强（当前通过 nvidia-smi 检测，可选）
 # pynvml>=11.5.0,<13.0.0
 
-# ==================== 视频处理（pre.pipeline 依赖，task_processor 动态导入） ====================
-# 如需启用 pre.* 视频流水线，请安装：
+
+# ==================== 视频流水线相关（pre.* 动态导入，未默认启用） ====================
 # moviepy==1.0.3
 # imageio>=2.31.0,<3.0.0
 # imageio-ffmpeg>=0.6.0
@@ -53,11 +53,10 @@ GPUtil>=1.4.0,<2.0.0
 # Pillow>=10.0.0,<11.0.0
 # opencv-python>=4.8.0,<5.0.0
 
+
 # ==================== 说明 ====================
-# 本清单依据对 web_hub 目录下 Python 文件的 import 实际遍历：
-# - 直接 import 的三方库：requests, urllib3, beautifulsoup4, Flask, Jinja2,
-#   python-dotenv, PyYAML, redis, psutil, GPUtil
-# - 可选：selenium（登录辅助）、mcp/playwright（仅 archived 脚本）、lxml、hiredis、waitress、pynvml
-# - ASR（语音识别）默认关闭。如需启用，请安装 funasr 及其依赖并在代码中启用相关功能
-# - 视频流水线所需的依赖在代码中以 pre.* 动态加载，默认不安装
-# - 未在代码中使用的包（如 pandas, rich, tqdm, python-dateutil 等）已移除以保持最小化
+# - 以上「核心依赖」来自对 web_hub 目录下 Python 文件的 AST 扫描结果；
+#   已过滤掉本地模块（shared/*, lightweight/* 等）与标准库。
+# - 可选依赖仅在特定功能（如浏览器自动化、生产部署）启用时需要。
+# - ASR（语音识别）默认关闭，若启用需额外安装 funasr 相关依赖。
+# - 视频流水线依赖量大，默认关闭，需启用时再按需安装。

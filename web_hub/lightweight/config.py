@@ -135,6 +135,9 @@ class ConfigManager:
         # 6. 检测GPU并更新配置
         self._detect_gpu()
 
+        # 7. 默认禁用ASR相关步骤，避免在生产模式下误触发高耗资源流程
+        self._disable_asr_by_default()
+
 
 
     def _load_env_file(self):
@@ -337,10 +340,6 @@ class ConfigManager:
                 self.config.pipeline_config[k] = False
 
 
-
-    def get_config(self) -> LightweightConfig:
-        """                                                                                                                                                                         "
-        pass
 
     def get_pipeline_config(self) -> Dict[str, Any]:
         """获取pipeline配置"""

@@ -287,8 +287,21 @@ class AicutForumCrawler:
 
             for i, row in enumerate(thread_rows):
                 try:
-                    # 查找帖子链接
-                    thread_link = row.find('a', href=re.compile(r'thread-\d+-\d+-\d+\.html'))
+                    # 查找帖子链接 - 优先查找带标题的链接（class="xst"）
+                    thread_link = row.find('a', class_='xst', href=re.compile(r'thread-\d+-\d+-\d+\.html'))
+
+                    # 如果没找到，查找所有thread链接，选择有文本的
+                    if not thread_link:
+                        all_thread_links = row.find_all('a', href=re.compile(r'thread-\d+-\d+-\d+\.html'))
+                        for link in all_thread_links:
+                            if link.get_text(strip=True):
+                                thread_link = link
+                                break
+
+                    # 如果还是没找到，使用第一个thread链接
+                    if not thread_link:
+                        thread_link = row.find('a', href=re.compile(r'thread-\d+-\d+-\d+\.html'))
+
                     if not thread_link:
                         continue
 
@@ -311,6 +324,15 @@ class AicutForumCrawler:
 
                     # 获取帖子标题
                     title = thread_link.get_text(strip=True)
+
+                    # 如果标题为空，尝试从其他thread链接获取
+                    if not title:
+                        all_thread_links = row.find_all('a', href=re.compile(r'thread-\d+-\d+-\d+\.html'))
+                        for link in all_thread_links:
+                            link_text = link.get_text(strip=True)
+                            if link_text:
+                                title = link_text
+                                break
 
                     # 查找作者信息
                     author_link = row.find('a', href=re.compile(r'space-uid-\d+\.html'))
@@ -624,10 +646,10 @@ class AicutForumCrawler:
 
         # 音频URL模式 - 针对您网站的腾讯云COS存储
         patterns = [
-            # 腾讯云COS音频链接
-            r'https?://lrtcai-\d+\.cos\.ap-[^/]+\.myqcloud\.com/[^\s<>"\']*\.(?:mp3|wav|aac|flac|m4a)',
-            # 通用音频链接
-            r'https?://[^\s<>"\']+\.(?:mp3|wav|aac|flac|m4a)',
+            # 腾讯云COS音频链接（增加amr格式支持）
+            r'https?://lrtcai-\d+\.cos\.ap-[^/]+\.myqcloud\.com/[^\s<>"\']*\.(?:mp3|wav|aac|flac|m4a|amr)',
+            # 通用音频链接（增加amr格式支持）
+            r'https?://[^\s<>"\']+\.(?:mp3|wav|aac|flac|m4a|amr)',
         ]
 
         for pattern in patterns:
@@ -793,28 +815,38 @@ class AicutForumCrawler:
                     # 获取帖子详细内容
                     thread_content = self.get_thread_content(thread['thread_url'])
 
-                    # 检查是否包含视频或音频内容
-                    if thread_content['has_video'] or thread_content['has_audio']:
+                    # 🎯 支持三种类型的帖子：
+                    # 1. 视频帖子（视频处理）
+                    # 2. 音频帖子（音色克隆）
+                    # 3. 纯文本帖子（TTS合成）
+                    has_media = thread_content['has_video'] or thread_content['has_audio']
+                    has_text = bool(thread_content.get('content', '').strip())
+
+                    if has_media or has_text:
                         # 合并信息
                         media_post = {**thread, **thread_content}
                         new_video_posts.append(media_post)
 
-                        print(f"🎬 发现媒体帖子: {thread['title']}")
-                        print(f"   视频链接: {len(thread_content['video_urls'])} 个")
-                        print(f"   音频链接: {len(thread_content['audio_urls'])} 个")
-                        print(f"   附件: {len(thread_content['attachments'])} 个")
+                        if has_media:
+                            print(f"🎬 发现媒体帖子: {thread['title']}")
+                            print(f"   视频链接: {len(thread_content['video_urls'])} 个")
+                            print(f"   音频链接: {len(thread_content['audio_urls'])} 个")
+                            print(f"   附件: {len(thread_content['attachments'])} 个")
 
-                        # 显示具体链接
-                        for i, url in enumerate(thread_content['video_urls'], 1):
-                            print(f"     视频{i}: {url}")
-                        for i, url in enumerate(thread_content['audio_urls'], 1):
-                            print(f"     音频{i}: {url}")
+                            # 显示具体链接
+                            for i, url in enumerate(thread_content['video_urls'], 1):
+                                print(f"     视频{i}: {url}")
+                            for i, url in enumerate(thread_content['audio_urls'], 1):
+                                print(f"     音频{i}: {url}")
+                        else:
+                            print(f"📝 发现文本帖子: {thread['title']}")
+                            print(f"   内容长度: {len(thread_content.get('content', ''))} 字符")
 
                         # 显示封面信息
                         if thread_content['cover_info']:
                             print(f"   封面信息: {thread_content['cover_info']}")
                     else:
-                        print(f"📝 帖子无媒体内容: {thread['title']}")
+                        print(f"⚠️ 帖子无有效内容: {thread['title']}")
 
                     # 测试模式：标记为已处理（仅在内存中）
                     self.processed_threads.add(thread_id)
@@ -848,28 +880,38 @@ class AicutForumCrawler:
                     # 获取帖子详细内容
                     thread_content = self.get_thread_content(thread['thread_url'])
 
-                    # 检查是否包含视频或音频内容
-                    if thread_content['has_video'] or thread_content['has_audio']:
+                    # 🎯 支持三种类型的帖子：
+                    # 1. 视频帖子（视频处理）
+                    # 2. 音频帖子（音色克隆）
+                    # 3. 纯文本帖子（TTS合成）
+                    has_media = thread_content['has_video'] or thread_content['has_audio']
+                    has_text = bool(thread_content.get('content', '').strip())
+
+                    if has_media or has_text:
                         # 合并信息
                         media_post = {**thread, **thread_content}
                         new_video_posts.append(media_post)
 
-                        print(f"🎬 发现媒体帖子: {thread['title']}")
-                        print(f"   视频链接: {len(thread_content['video_urls'])} 个")
-                        print(f"   音频链接: {len(thread_content['audio_urls'])} 个")
-                        print(f"   附件: {len(thread_content['attachments'])} 个")
+                        if has_media:
+                            print(f"🎬 发现媒体帖子: {thread['title']}")
+                            print(f"   视频链接: {len(thread_content['video_urls'])} 个")
+                            print(f"   音频链接: {len(thread_content['audio_urls'])} 个")
+                            print(f"   附件: {len(thread_content['attachments'])} 个")
 
-                        # 显示具体链接
-                        for i, url in enumerate(thread_content['video_urls'], 1):
-                            print(f"     视频{i}: {url}")
-                        for i, url in enumerate(thread_content['audio_urls'], 1):
-                            print(f"     音频{i}: {url}")
+                            # 显示具体链接
+                            for i, url in enumerate(thread_content['video_urls'], 1):
+                                print(f"     视频{i}: {url}")
+                            for i, url in enumerate(thread_content['audio_urls'], 1):
+                                print(f"     音频{i}: {url}")
+                        else:
+                            print(f"📝 发现文本帖子: {thread['title']}")
+                            print(f"   内容长度: {len(thread_content.get('content', ''))} 字符")
 
                         # 显示封面信息
                         if thread_content['cover_info']:
                             print(f"   封面信息: {thread_content['cover_info']}")
                     else:
-                        print(f"📝 新帖子无媒体内容: {thread['title']}")
+                        print(f"⚠️ 新帖子无有效内容: {thread['title']}")
 
                     # 生产模式：标记为已处理并立即保存
                     self.mark_post_processed(thread_id)
