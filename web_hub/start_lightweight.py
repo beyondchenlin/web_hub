@@ -224,6 +224,10 @@ def add_cluster_api(processor):
             received_metadata = task_data.get('metadata', {})
             print(f"🔍 [DEBUG] 接收到的metadata: {received_metadata}")
 
+            # 🎯 提取任务类型
+            task_type_str = task_data.get('task_type') or received_metadata.get('task_type', 'video')
+            print(f"🔍 [DEBUG] 接收到的task_type: {task_type_str}")
+
             # 提取封面标题信息
             cover_title_up = received_metadata.get('cover_title_up', '')
             cover_title_middle = received_metadata.get('cover_title_middle', '')
@@ -274,10 +278,22 @@ def add_cluster_api(processor):
             # 创建任务
             print(f"🚨 DEBUG: 准备创建任务...")
             from lightweight.queue_manager import TaskPriority
+            from shared.task_model import TaskType
+
+            # 🎯 转换任务类型
+            task_type = TaskType.VIDEO  # 默认值
+            if task_type_str:
+                try:
+                    task_type = TaskType(task_type_str)
+                    print(f"✅ 任务类型: {task_type.value}")
+                except ValueError:
+                    print(f"⚠️ 未知的任务类型 '{task_type_str}'，使用默认值 VIDEO")
+
             task_id = processor.queue_manager.create_task(
                 source_url=url,
                 priority=TaskPriority.NORMAL,
-                metadata=task_metadata
+                metadata=task_metadata,
+                task_type=task_type  # 🎯 添加任务类型
             )
             print(f"🚨 DEBUG: 创建任务结果: {task_id}")
 
