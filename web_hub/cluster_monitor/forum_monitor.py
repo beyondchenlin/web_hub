@@ -709,6 +709,45 @@ class ForumMonitor:
                         if media_url:
                             print(f"🎵 提取到媒体URL: {media_url}")
 
+                        # 🎯 使用TTSRequestParser解析帖子内容，提取参数
+                        parsed_params = {}
+                        try:
+                            # 动态导入TTSRequestParser
+                            import sys
+                            import os
+                            tts_integration_path = os.path.join(os.path.dirname(__file__), '..', '..', 'tts', 'custom_integration', 'integration')
+                            if tts_integration_path not in sys.path:
+                                sys.path.insert(0, tts_integration_path)
+
+                            from tts_request_parser import TTSRequestParser
+
+                            if detected_type == TaskType.VOICE_CLONE:
+                                # 解析音色克隆请求
+                                success, params = TTSRequestParser.parse_voice_clone_request(
+                                    task.get('title', ''),
+                                    task.get('content', ''),
+                                    audio_urls=audio_urls,
+                                    video_urls=video_urls
+                                )
+                                if success:
+                                    parsed_params = params
+                                    print(f"✅ 解析音色克隆参数成功: 音色名称={params.get('clone_voice_name')}")
+                                else:
+                                    print(f"⚠️ 解析音色克隆参数失败: {params.get('error')}")
+                            else:
+                                # 解析TTS请求
+                                success, params = TTSRequestParser.parse_tts_request(
+                                    task.get('title', ''),
+                                    task.get('content', '')
+                                )
+                                if success:
+                                    parsed_params = params
+                                    print(f"✅ 解析TTS参数成功: 音色={params.get('voice_name')}, 文本长度={len(params.get('tts_text', ''))}")
+                                else:
+                                    print(f"⚠️ 解析TTS参数失败: {params.get('error')}")
+                        except Exception as e:
+                            print(f"⚠️ TTSRequestParser解析异常: {e}")
+
                         payload = {
                             'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
                             'title': task.get('title', ''),
@@ -719,6 +758,11 @@ class ForumMonitor:
                             'post_id': task['metadata'].get('post_id'),
                             'post_url': task.get('post_url'),
                         }
+
+                        # 🎯 合并解析出的参数
+                        if parsed_params:
+                            payload.update(parsed_params)
+
                         task['payload'] = payload
                         task['metadata']['source'] = 'forum_tts'
                     else:
