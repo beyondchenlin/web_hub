@@ -49,3 +49,7 @@ tts/indextts2/*
 *.bak
 *.swp
 *.swo
+
+
+# Uploads (forum attachments downloaded for processing)
+tts/custom_integration/integration/uploads/
