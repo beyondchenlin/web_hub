@@ -251,11 +251,31 @@ class AicutForumCrawler:
         try:
             print(f"📋 获取板块帖子: {self.forum_url}")
 
-            # 获取板块页面
-            print("🌐 请求板块页面...")
-            response = self.session.get(self.forum_url, timeout=15)
-            print(f"📄 板块页面状态码: {response.status_code}")
-            response.raise_for_status()
+            # 🎯 增加重试机制处理网络超时
+            max_retries = 3
+            retry_delay = 2
+            response = None
+
+            for attempt in range(max_retries):
+                try:
+                    print(f"🌐 请求板块页面... (尝试 {attempt + 1}/{max_retries})")
+                    response = self.session.get(self.forum_url, timeout=15)
+                    print(f"📄 板块页面状态码: {response.status_code}")
+                    response.raise_for_status()
+                    break  # 成功，跳出重试循环
+                except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
+                    if attempt < max_retries - 1:
+                        print(f"⚠️ 网络超时，{retry_delay}秒后重试... ({attempt + 1}/{max_retries})")
+                        import time
+                        time.sleep(retry_delay)
+                        retry_delay *= 2  # 指数退避
+                    else:
+                        print(f"❌ 网络超时，已重试{max_retries}次，跳过本次检查")
+                        raise
+
+            if not response:
+                print("❌ 无法获取板块页面")
+                return []
 
             # 保存页面内容用于调试
             page_content = response.text

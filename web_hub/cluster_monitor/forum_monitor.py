@@ -238,16 +238,26 @@ class ForumMonitor:
     
     def setup_logging(self):
         """设置日志"""
+        import sys
         log_dir = "logs"
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        
+
+        # 🎯 确保控制台输出使用UTF-8编码
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        # 设置控制台编码为UTF-8
+        if hasattr(sys.stdout, 'reconfigure'):
+            sys.stdout.reconfigure(encoding='utf-8')
+
         logging.basicConfig(
             level=logging.INFO,
             format='%(asctime)s - %(levelname)s - %(message)s',
             handlers=[
                 logging.FileHandler(f'{log_dir}/forum_monitor.log', encoding='utf-8'),
-                logging.StreamHandler()
+                console_handler
             ]
         )
         self.logger = logging.getLogger(__name__)
