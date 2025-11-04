@@ -363,14 +363,23 @@ class TaskProcessor:
                     task.metadata = {}
                 task.metadata['post_url'] = task.source_url
 
-                # 解析帖子获取真实的视频URL
-                video_url = self._parse_post_url_for_video(task)
-                if not video_url:
-                    raise ValueError("无法从帖子URL中提取视频链接")
+                # 解析帖子获取真实的媒体URL（视频/音频/文本）
+                media_url = self._parse_post_url_for_video(task)
+                if not media_url:
+                    raise ValueError("无法从帖子URL中提取内容")
 
-                # 更新source_url为真实的视频URL
-                task.source_url = video_url
-                print(f"✅ 成功解析视频URL: {video_url}")
+                # 🎯 处理纯文本任务
+                if media_url == "TEXT_ONLY_TASK":
+                    print(f"📝 检测到纯文本任务，跳过下载步骤")
+                    # 纯文本任务不需要下载，直接进入处理队列
+                    task.source_url = None  # 清空source_url
+                    task.status = TaskStatus.DOWNLOADED
+                    self.queue_manager.add_to_process_queue(task)
+                    return
+
+                # 更新source_url为真实的媒体URL
+                task.source_url = media_url
+                print(f"✅ 成功解析媒体URL: {media_url}")
 
             if not task.source_url:
                 raise ValueError("缺少源URL")
@@ -1186,14 +1195,28 @@ class TaskProcessor:
             print(f"🔍 [DEBUG] 获取到的content_info: {content_info}")
             print(f"🔍 [DEBUG] content_info中的cover_info: {content_info.get('cover_info', {})}")
 
+            # 🎯 支持三种类型：视频、音频、纯文本
             video_urls = content_info.get('video_urls', [])
-            if not video_urls:
-                print("❌ 帖子中未找到视频链接")
-                return None
+            audio_urls = content_info.get('audio_urls', [])
+            core_text = content_info.get('core_text', '').strip()
 
-            # 获取第一个视频链接
-            video_url = video_urls[0]
-            print(f"✅ 成功提取视频链接: {video_url}")
+            # 优先级：视频 > 音频 > 纯文本
+            media_url = None
+            if video_urls:
+                media_url = video_urls[0]
+                print(f"✅ 成功提取视频链接: {media_url}")
+            elif audio_urls:
+                media_url = audio_urls[0]
+                print(f"✅ 成功提取音频链接: {media_url}")
+            elif core_text:
+                # 纯文本任务（TTS合成），不需要media_url
+                print(f"✅ 成功提取文本内容: {len(core_text)} 字符")
+                print(f"📝 文本预览: {core_text[:100]}...")
+                # 对于纯文本任务，返回特殊标记
+                media_url = "TEXT_ONLY_TASK"
+            else:
+                print("❌ 帖子中未找到视频、音频或文本内容")
+                return None
 
             # 🎯 关键修复：立即更新任务metadata中的封面标题信息
             original_filenames = content_info.get('original_filenames', [])
@@ -1201,8 +1224,10 @@ class TaskProcessor:
 
             task.metadata.update({
                 'video_urls': video_urls,
+                'audio_urls': audio_urls,  # 🎯 添加音频链接
                 'original_filenames': original_filenames,
                 'content': content_info.get('content', ''),
+                'core_text': content_info.get('core_text', ''),  # 🎯 添加核心文本（用于TTS）
                 'cover_info': cover_info,
                 'title': content_info.get('title', ''),
                 'author': content_info.get('author', ''),
@@ -1284,7 +1309,7 @@ class TaskProcessor:
                 print(f"⚠️ 保存帖子内容到数据库失败: {e}")
                 # 不影响主流程，继续执行
 
-            return video_url
+            return media_url
 
         except Exception as e:
             print(f"❌ 解析帖子URL失败: {e}")
