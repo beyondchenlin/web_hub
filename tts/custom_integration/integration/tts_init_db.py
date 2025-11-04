@@ -66,7 +66,8 @@ def init_database():
                 voice_quota INTEGER DEFAULT 20,
                 storage_quota_mb INTEGER DEFAULT 500,
                 is_active BOOLEAN DEFAULT 1,
-                is_admin BOOLEAN DEFAULT 0
+                is_admin BOOLEAN DEFAULT 0,
+                default_voice_id VARCHAR(50)
             )
         ''')
         print("   ✅ 用户表创建成功")

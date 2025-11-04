@@ -148,11 +148,11 @@ class TTSTaskService:
             return {
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
-                'voice_name': title or '未命名音色',
-                'description': content,
+                'voice_name': forum_payload.get('clone_voice_name', title or '未命名音色'),
+                'description': forum_payload.get('description', content),
                 'audio_file': audio_file,
                 'duration': 0,  # 需要实际计算音频时长
-                'is_public': False,
+                'is_public': forum_payload.get('clone_is_public', False),
                 # 保留原始论坛信息
                 'thread_id': forum_payload.get('thread_id'),
                 'post_id': forum_payload.get('post_id'),
@@ -162,9 +162,12 @@ class TTSTaskService:
             return {
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
-                'text': content or title,
-                'voice_id': '',  # 需要从内容中提取
+                'text': forum_payload.get('tts_text', content or title),
+                'voice_id': forum_payload.get('voice_name', '苏瑶'),  # 从解析结果中提取
                 'output_format': 'mp3',
+                'speed': forum_payload.get('speed', 1.0),
+                'emotion': forum_payload.get('emotion', ''),
+                'emotion_weight': forum_payload.get('emotion_weight', 0.5),
                 # 保留原始论坛信息
                 'thread_id': forum_payload.get('thread_id'),
                 'post_id': forum_payload.get('post_id'),
@@ -182,6 +185,21 @@ class TTSTaskService:
         """
         # 🔧 数据转换：将论坛任务payload转换为TTS API期望的格式
         converted_payload = self._convert_forum_payload_to_tts_format(task_payload, 'tts')
+
+        # 🔧 解析音色名称（支持"本人音色"等别名）
+        user_id = converted_payload.get('user_id')
+        voice_name = converted_payload.get('voice_id', '')  # 用户输入的音色名称
+
+        if user_id and voice_name:
+            try:
+                from voice_mapper import VoiceMapper
+                mapper = VoiceMapper()
+                actual_voice_id, reason = mapper.resolve_voice_name(user_id, voice_name)
+                converted_payload['voice_id'] = actual_voice_id
+                print(f"🔍 音色解析: {voice_name} → {actual_voice_id}")
+                print(f"   说明: {reason}")
+            except Exception as e:
+                print(f"⚠️ 音色解析失败，使用原始名称: {e}")
 
         api_service = self._load_api_service()
         success, result = api_service.process_tts_request(converted_payload)
@@ -202,6 +220,28 @@ class TTSTaskService:
 
         api_service = self._load_api_service()
         success, result = api_service.process_voice_clone_request(converted_payload)
+
+        # 🔧 如果克隆成功，保存用户音色映射
+        if success and result.get('voice_id'):
+            try:
+                from voice_mapper import VoiceMapper
+                mapper = VoiceMapper()
+                mapper.save_user_voice(
+                    user_id=converted_payload.get('user_id'),
+                    voice_id=result.get('voice_id'),
+                    voice_name=converted_payload.get('voice_name'),
+                    file_path=result.get('file_path', ''),
+                    audio_path=result.get('audio_path', ''),
+                    duration=result.get('duration', 0.0),
+                    file_size_mb=result.get('file_size_mb', 0.0),
+                    is_public=converted_payload.get('is_public', False),
+                    description=converted_payload.get('description', ''),
+                    set_as_default=True  # 设为用户的默认音色
+                )
+                print(f"✅ 已保存用户音色映射: {converted_payload.get('user_id')} -> {result.get('voice_id')}")
+            except Exception as e:
+                print(f"⚠️ 保存用户音色映射失败: {e}")
+
         return {"success": success, "result": result}
 
     def format_forum_reply(self, processed_data: Dict[str, Any]) -> Dict[str, Any]:

@@ -14,20 +14,24 @@ from typing import Dict, Tuple, Optional, List
 class TTSRequestParser:
     """TTS请求解析器"""
 
-    # 帖子类型标记
+    # 帖子类型标记（支持多种格式）
+    TTS_MARKERS = ["【制作AI声音】", "[制作AI声音]", "制作AI声音"]
+    VOICE_CLONE_MARKERS = ["【音色克隆】", "[音色克隆]", "音色克隆"]
+
+    # 兼容旧代码
     TTS_MARKER = "【制作AI声音】"
     VOICE_CLONE_MARKER = "【音色克隆】"
 
-    # 参数标记
+    # 参数标记（支持括号格式和冒号格式）
     PARAM_MARKERS = {
-        'text': ['【文案】', '【文本】', '【内容】'],
-        'voice': ['【选择音色】', '【音色】', '【声音】'],
-        'speed': ['【语速】', '【速度】'],
-        'emotion': ['【情感】', '【感情】'],
-        'emotion_weight': ['【情感权重】', '【权重】'],
-        'voice_name': ['【音色名称】', '【克隆名称】'],
-        'is_public': ['【是否公开】', '【公开】'],
-        'description': ['【描述】', '【说明】', '【给自己的音色起个名词】'],
+        'text': ['【文案】', '[文案]', '文案:', '【文本】', '[文本]', '文本:', '【内容】', '[内容]', '内容:'],
+        'voice': ['【选择音色】', '[选择音色]', '选择音色:', '【音色】', '[音色]', '音色:', '【声音】', '[声音]', '声音:'],
+        'speed': ['【语速】', '[语速]', '语速:', '【速度】', '[速度]', '速度:'],
+        'emotion': ['【情感】', '[情感]', '情感:', '【感情】', '[感情]', '感情:'],
+        'emotion_weight': ['【情感权重】', '[情感权重]', '情感权重:', '【权重】', '[权重]', '权重:'],
+        'voice_name': ['【音色名称】', '[音色名称]', '音色名称:', '【克隆名称】', '[克隆名称]', '克隆名称:'],
+        'is_public': ['【是否公开】', '[是否公开]', '是否公开:', '【公开】', '[公开]', '公开:'],
+        'description': ['【描述】', '[描述]', '描述:', '【说明】', '[说明]', '说明:', '【给自己的音色起个名词】', '[给自己的音色起个名词]'],
     }
 
     @staticmethod
@@ -47,37 +51,52 @@ class TTSRequestParser:
         tags = post_data.get('tags', [])
         attachments = post_data.get('attachments', [])
 
-        # 第1步：检查标签（优先级最高）
-        if TTSRequestParser.TTS_MARKER in title or any(TTSRequestParser.TTS_MARKER in tag for tag in tags):
-            return {
-                'type': 'tts',
-                'confidence': 99,
-                'reason': '帖子标签明确标注为【制作AI声音】',
-                'method': 'tag_detection'
-            }
+        # 第1步：检查标签（优先级最高）- 支持多种格式
+        # 检查TTS标记
+        for marker in TTSRequestParser.TTS_MARKERS:
+            if marker in title or any(marker in tag for tag in tags):
+                return {
+                    'type': 'tts',
+                    'confidence': 99,
+                    'reason': f'帖子标签明确标注为 {marker}',
+                    'method': 'tag_detection'
+                }
 
-        if TTSRequestParser.VOICE_CLONE_MARKER in title or any(TTSRequestParser.VOICE_CLONE_MARKER in tag for tag in tags):
-            return {
-                'type': 'voice_clone',
-                'confidence': 99,
-                'reason': '帖子标签明确标注为【音色克隆】',
-                'method': 'tag_detection'
-            }
+        # 检查音色克隆标记
+        for marker in TTSRequestParser.VOICE_CLONE_MARKERS:
+            if marker in title or any(marker in tag for tag in tags):
+                return {
+                    'type': 'voice_clone',
+                    'confidence': 99,
+                    'reason': f'帖子标签明确标注为 {marker}',
+                    'method': 'tag_detection'
+                }
 
         # 第2步：检查内容字段
+        # 检查TTS相关字段
         if any(marker in content for marker in TTSRequestParser.PARAM_MARKERS['text']):
             return {
                 'type': 'tts',
                 'confidence': 95,
-                'reason': '内容包含【文案】字段',
+                'reason': '内容包含文案字段',
                 'method': 'field_detection'
             }
 
+        # 检查"选择音色"字段（TTS请求特有）
+        if any(marker in content for marker in TTSRequestParser.PARAM_MARKERS['voice']):
+            return {
+                'type': 'tts',
+                'confidence': 90,
+                'reason': '内容包含选择音色字段',
+                'method': 'field_detection'
+            }
+
+        # 检查音色克隆相关字段
         if any(marker in content for marker in TTSRequestParser.PARAM_MARKERS['voice_name']):
             return {
                 'type': 'voice_clone',
                 'confidence': 95,
-                'reason': '内容包含【音色名称】字段',
+                'reason': '内容包含音色名称字段',
                 'method': 'field_detection'
             }
 
@@ -147,36 +166,72 @@ class TTSRequestParser:
     def extract_parameter(content: str, markers: List[str]) -> str:
         """
         从内容中提取参数
-        
-        格式：【标记】内容【下一个标记】
+
+        支持格式：
+        1. 【标记】内容【下一个标记】
+        2. [标记]内容[下一个标记]
+        3. 标记:\n内容
         """
         for marker in markers:
             # 查找标记位置
             start_idx = content.find(marker)
             if start_idx == -1:
                 continue
-            
+
             # 从标记后开始
             start_idx += len(marker)
-            
-            # 查找下一个【标记
-            end_idx = content.find('【', start_idx)
-            if end_idx == -1:
-                # 如果没有下一个标记，取到末尾
-                value = content[start_idx:].strip()
+
+            # 跳过冒号后的空白字符（如果是冒号格式）
+            if marker.endswith(':'):
+                # 冒号格式：取到下一行或下一个标记
+                remaining = content[start_idx:]
+                # 查找下一个换行符
+                newline_idx = remaining.find('\n')
+                if newline_idx != -1:
+                    # 取第一行作为值
+                    value = remaining[:newline_idx].strip()
+                    if value:
+                        return value
+                    # 如果第一行为空，取下一行
+                    remaining = remaining[newline_idx+1:]
+                    next_newline = remaining.find('\n')
+                    if next_newline != -1:
+                        value = remaining[:next_newline].strip()
+                    else:
+                        value = remaining.strip()
+                    if value:
+                        return value
+                else:
+                    value = remaining.strip()
+                    if value:
+                        return value
             else:
-                value = content[start_idx:end_idx].strip()
-            
-            if value:
-                return value
-        
+                # 括号格式：查找下一个标记（支持【、[和换行）
+                end_idx_1 = content.find('【', start_idx)
+                end_idx_2 = content.find('[', start_idx)
+                end_idx_3 = content.find('\n', start_idx)
+
+                # 收集所有有效的结束位置
+                end_indices = [idx for idx in [end_idx_1, end_idx_2, end_idx_3] if idx != -1]
+
+                if not end_indices:
+                    # 如果没有下一个标记，取到末尾
+                    value = content[start_idx:].strip()
+                else:
+                    # 取最近的一个
+                    end_idx = min(end_indices)
+                    value = content[start_idx:end_idx].strip()
+
+                if value:
+                    return value
+
         return ""
     
     @staticmethod
     def parse_tts_request(title: str, content: str) -> Tuple[bool, Dict]:
         """
         解析TTS请求
-        
+
         返回: (是否成功, 参数字典)
         """
         try:
@@ -185,7 +240,48 @@ class TTSRequestParser:
                 content,
                 TTSRequestParser.PARAM_MARKERS['text']
             )
-            
+
+            # 如果没有找到【文案】字段，尝试提取所有非参数行作为文案
+            if not text:
+                # 移除所有参数行和参数值行，剩余的就是文案
+                lines = content.split('\n')
+                text_lines = []
+
+                # 定义所有参数标记
+                all_markers = []
+                for markers in TTSRequestParser.PARAM_MARKERS.values():
+                    all_markers.extend(markers)
+                all_markers.extend(TTSRequestParser.TTS_MARKERS)
+                all_markers.extend(TTSRequestParser.VOICE_CLONE_MARKERS)
+
+                skip_next = False  # 标记是否跳过下一行（参数值）
+
+                for i, line in enumerate(lines):
+                    line = line.strip()
+
+                    # 如果上一行是参数标记，跳过当前行（参数值）
+                    if skip_next:
+                        skip_next = False
+                        continue
+
+                    # 跳过空行
+                    if not line:
+                        continue
+
+                    # 检查是否是参数行
+                    is_param_line = any(marker in line for marker in all_markers)
+
+                    if is_param_line:
+                        # 如果参数标记以冒号结尾，下一行是参数值，需要跳过
+                        if any(line.endswith(marker) for marker in all_markers if marker.endswith(':')):
+                            skip_next = True
+                        continue
+
+                    # 不是参数行，加入文案
+                    text_lines.append(line)
+
+                text = '\n'.join(text_lines).strip()
+
             if not text:
                 return False, {'error': '❌ 缺少【文本】参数'}
             
