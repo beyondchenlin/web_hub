@@ -127,9 +127,15 @@ class TTSTaskService:
         # 生成唯一的request_id
         request_id = str(uuid.uuid4())
 
-        # 提取音频URL（第一个）
-        audio_urls = forum_payload.get('audio_urls', [])
-        audio_url = audio_urls[0] if audio_urls else ''
+        # 🎯 提取音频URL（支持两种格式）
+        # 格式1：audio_url (单个URL，新格式)
+        # 格式2：audio_urls (URL数组，旧格式)
+        audio_url = forum_payload.get('audio_url', '')
+        if not audio_url:
+            audio_urls = forum_payload.get('audio_urls', [])
+            audio_url = audio_urls[0] if audio_urls else ''
+
+        print(f"🔍 [DEBUG] 提取到的audio_url: {audio_url}")
 
         # 🔧 关键修复：下载音频文件到本地
         audio_file = ''
