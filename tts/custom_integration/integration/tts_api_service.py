@@ -478,11 +478,51 @@ class TTSAPIService:
             logger.info(f"   音频目标路径: {target_audio_path}")
             logger.info(f"   .pt目标路径: {target_pt_path}")
 
+            # 🎯 处理AMR格式：先转换为WAV
+            audio_file_to_process = audio_file
+            if audio_file.lower().endswith('.amr'):
+                logger.info(f"   检测到AMR格式，使用FFmpeg转换为WAV...")
+                try:
+                    import subprocess
+                    temp_wav = audio_file.replace('.amr', '_converted.wav')
+
+                    # 使用FFmpeg转换AMR到WAV
+                    cmd = [
+                        'ffmpeg', '-i', audio_file,
+                        '-ar', '22050',  # 采样率
+                        '-ac', '1',      # 单声道
+                        '-y',            # 覆盖输出文件
+                        temp_wav
+                    ]
+
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    if result.returncode == 0 and os.path.exists(temp_wav):
+                        logger.info(f"   ✓ AMR转换成功: {temp_wav}")
+                        audio_file_to_process = temp_wav
+                    else:
+                        logger.error(f"   ❌ FFmpeg转换失败: {result.stderr}")
+                        raise Exception(f"AMR转换失败: {result.stderr}")
+
+                except FileNotFoundError:
+                    logger.error(f"   ❌ 未找到FFmpeg，无法处理AMR格式")
+                    raise Exception("需要安装FFmpeg才能处理AMR格式音频")
+                except Exception as e:
+                    logger.error(f"   ❌ AMR转换异常: {e}")
+                    raise
+
             # 加载并标准化音频（22050 Hz）
             logger.info(f"   正在处理音频文件...")
-            audio, sr = librosa.load(audio_file, sr=22050)
+            audio, sr = librosa.load(audio_file_to_process, sr=22050)
             duration = len(audio) / sr
             logger.info(f"   音频时长: {duration:.2f}秒，采样率: {sr}Hz")
+
+            # 🎯 清理临时转换文件
+            if audio_file_to_process != audio_file and os.path.exists(audio_file_to_process):
+                try:
+                    os.remove(audio_file_to_process)
+                    logger.info(f"   ✓ 已清理临时文件: {audio_file_to_process}")
+                except Exception as e:
+                    logger.warning(f"   ⚠️ 清理临时文件失败: {e}")
 
             # 保存标准化后的音频
             sf.write(str(target_audio_path), audio, sr, subtype='PCM_16')
