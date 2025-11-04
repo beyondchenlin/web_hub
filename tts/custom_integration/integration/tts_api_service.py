@@ -305,6 +305,48 @@ class TTSAPIService:
         logger.info(f"🎵 生成模拟音频: {duration:.1f}秒, {len(buffer.getvalue())} 字节")
         return buffer.getvalue()
 
+    def _get_next_voice_number(self, user_id: str, voice_name: str) -> int:
+        """
+        获取音色的下一个递增编号
+
+        Args:
+            user_id: 用户ID
+            voice_name: 音色名称
+
+        Returns:
+            下一个编号（从1开始）
+        """
+        try:
+            # 查询数据库中该用户该音色名称的最大编号
+            cursor = self.db_conn.cursor()
+            cursor.execute('''
+                SELECT voice_id FROM voices
+                WHERE owner_id = ? AND voice_name = ?
+                ORDER BY created_at DESC
+            ''', (user_id, voice_name))
+
+            existing_voices = cursor.fetchall()
+
+            if not existing_voices:
+                return 1
+
+            # 从voice_id中提取编号
+            max_number = 0
+            for (voice_id,) in existing_voices:
+                # voice_id格式: 冬哥_1, 冬哥_2, ...
+                if '_' in voice_id:
+                    try:
+                        number = int(voice_id.split('_')[-1])
+                        max_number = max(max_number, number)
+                    except ValueError:
+                        continue
+
+            return max_number + 1
+
+        except Exception as e:
+            logger.warning(f"⚠️ 获取音色编号失败: {e}，使用默认值1")
+            return 1
+
     def _call_voice_clone_api(self, audio_file: str, voice_name: str,
                               user_id: str) -> Optional[str]:
         """
@@ -328,8 +370,10 @@ class TTSAPIService:
                 logger.error(f"❌ 音频文件不存在: {audio_file}")
                 return None
 
-            # 生成唯一的音色ID
-            voice_id = f"user_{user_id}_{voice_name}_{int(time.time())}"
+            # 🎯 生成友好的音色ID：音色名称_递增编号
+            voice_number = self._get_next_voice_number(user_id, voice_name)
+            voice_id = f"{voice_name}_{voice_number}"
+            logger.info(f"🎯 生成音色ID: {voice_id}")
 
             # 方案1: 尝试调用 IndexTTS2 的 /create_voice API
             try:
