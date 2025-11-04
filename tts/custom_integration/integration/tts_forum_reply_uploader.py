@@ -221,7 +221,8 @@ class TTSForumReplyUploader:
 
 🎵 您可以下载上面的音频文件进行试听。
 
-感谢使用IndexTTS2系统！
+---
+🚀 懒人AI同城号，先起飞，再调整姿势
 """
     
     def _generate_voice_clone_reply(self, request_id: str, voice_id: str,
@@ -241,7 +242,8 @@ class TTSForumReplyUploader:
 
 ✨ 您现在可以在【制作AI声音】中使用这个音色了！
 
-感谢使用IndexTTS2系统！
+---
+🚀 懒人AI同城号，先起飞，再调整姿势
 """
     
     def _upload_to_forum(self, thread_id: str, content: str,
