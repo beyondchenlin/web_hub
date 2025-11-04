@@ -730,24 +730,8 @@ class TaskProcessor:
             # 创建计时器
             timer = StepTimer()
 
-            # 创建音频剪辑器 - 使用模型管理器
+            # ASR 已禁用：不加载 funasr/VideoClipper，audio_clipper 保持为 None
             audio_clipper = None
-            try:
-                from lightweight.model_manager import model_manager
-                funasr_model = model_manager.get_funasr_model(lang='zh')
-                if funasr_model is not None:
-                    from funclip.videoclipper import VideoClipper
-                    audio_clipper = VideoClipper(funasr_model)
-                    audio_clipper.lang = 'zh'
-                    print("✅ 语音识别模型加载成功")
-                    self.logger.info("语音识别模型加载成功")
-                else:
-                    print("⚠️ 语音识别模型加载失败")
-                    self.logger.warning("语音识别模型加载失败")
-            except Exception as e:
-                print(f"⚠️ 语音识别模型加载异常: {e}")
-                self.logger.warning(f"语音识别模型加载异常: {e}")
-                audio_clipper = None
 
             # 初始化pipeline（不需要参数）
             init_pipeline()
