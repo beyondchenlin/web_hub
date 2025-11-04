@@ -392,7 +392,15 @@ class AicutForumCrawler:
         """获取帖子详细内容"""
         try:
             print(f"📖 获取帖子内容: {thread_url}")
-            
+
+            # 🎯 关键修复：访问帖子前先确保已登录
+            if not self.logged_in and self.username and self.password:
+                print("🔐 检测到未登录，尝试自动登录...")
+                if self.login():
+                    print("✅ 自动登录成功")
+                else:
+                    print("⚠️ 自动登录失败，将以游客模式访问")
+
             response = self.session.get(thread_url)
             response.raise_for_status()
             
