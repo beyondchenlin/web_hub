@@ -42,29 +42,18 @@ except ImportError as e:
     print(f"⚠️ 模拟数据管理器导入失败: {e}")
     MOCK_DATA_AVAILABLE = False
 
-# 🎯 关键修复：使用完整版论坛爬虫，支持封面标题提取
+# 🎯 导入完整版论坛爬虫
 try:
-    # 优先使用完整版论坛爬虫（从上级目录导入）
     import sys
     import os
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     from aicut_forum_crawler import AicutForumCrawler
     from shared.forum_crawler_manager import get_forum_crawler_manager
     FORUM_CRAWLER_AVAILABLE = True
-    USE_FULL_CRAWLER = True
-    print("✅ 完整版论坛爬虫模块导入成功")
+    print("✅ 论坛爬虫模块导入成功")
 except ImportError as e:
-    print(f"⚠️ 完整版论坛爬虫导入失败: {e}")
-    try:
-        # 备用：简化版论坛爬虫
-        from simple_forum_crawler import SimpleForumCrawler
-        FORUM_CRAWLER_AVAILABLE = True
-        USE_FULL_CRAWLER = False
-        print("✅ 简化论坛爬虫模块导入成功（备用）")
-    except ImportError as e2:
-        print(f"⚠️ 简化论坛爬虫模块导入失败: {e2}")
-        FORUM_CRAWLER_AVAILABLE = False
-        USE_FULL_CRAWLER = False
+    print(f"❌ 论坛爬虫导入失败: {e}")
+    FORUM_CRAWLER_AVAILABLE = False
 
 
 class SimpleMachine:
@@ -151,32 +140,23 @@ class ForumMonitor:
                     print(f"   - 单次运行: ✅ 是")
 
                 # 🎯 使用 ForumCrawlerManager 获取爬虫实例
-                if USE_FULL_CRAWLER:
-                    print("📋 使用 ForumCrawlerManager 获取论坛爬虫实例...")
-                    manager = get_forum_crawler_manager()
-                    self.forum_crawler = manager.get_crawler("main")
+                print("📋 使用 ForumCrawlerManager 获取论坛爬虫实例...")
+                manager = get_forum_crawler_manager()
+                self.forum_crawler = manager.get_crawler("main")
 
-                    if self.forum_crawler.logged_in:
-                        print("✅ 论坛爬虫已就绪（已登录）")
-                    else:
-                        print("⚠️ 论坛爬虫未登录，尝试自动登录...")
-                        # 🎯 关键修复：监控节点启动时主动登录
-                        if username and password:
-                            login_success = self.forum_crawler.login()
-                            if login_success:
-                                print("✅ 论坛登录成功")
-                            else:
-                                print("⚠️ 论坛登录失败，将以游客模式运行")
-                        else:
-                            print("⚠️ 未配置论坛账号，将以游客模式运行")
+                if self.forum_crawler.logged_in:
+                    print("✅ 论坛爬虫已就绪（已登录）")
                 else:
-                    print("📋 使用简化版论坛爬虫（基础功能）")
-                    self.forum_crawler = SimpleForumCrawler(
-                        username=username,
-                        password=password,
-                        base_url=self.config.FORUM_BASE_URL,
-                        forum_url=self.config.FORUM_TARGET_URL
-                    )
+                    print("⚠️ 论坛爬虫未登录，尝试自动登录...")
+                    # 🎯 关键修复：监控节点启动时主动登录
+                    if username and password:
+                        login_success = self.forum_crawler.login()
+                        if login_success:
+                            print("✅ 论坛登录成功")
+                        else:
+                            print("⚠️ 论坛登录失败，将以游客模式运行")
+                    else:
+                        print("⚠️ 未配置论坛账号，将以游客模式运行")
                     print("✅ 论坛爬虫初始化成功")
 
                     # 简化版爬虫需要手动登录
@@ -673,108 +653,86 @@ class ForumMonitor:
 
             print(f"🔍 检查论坛新帖: {self.config.FORUM_TARGET_URL}")
 
-            # 🎯 关键修复：使用完整版论坛爬虫获取详细信息
-            if USE_FULL_CRAWLER:
-                # 使用完整版论坛爬虫：获取帖子详细信息（包括封面标题）
-                print("📋 使用完整版论坛爬虫获取帖子详细信息")
-                new_posts = self.forum_crawler.monitor_new_posts()  # 正确的方法名
-            else:
-                # 备用：简化版论坛爬虫
-                print("📋 使用简化版论坛爬虫获取基本信息")
-                new_posts = self.forum_crawler.get_new_posts_simple()
+            # 🎯 使用完整版论坛爬虫获取详细信息（包括封面标题、视频/音频链接等）
+            print("📋 使用完整版论坛爬虫获取帖子详细信息")
+            new_posts = self.forum_crawler.monitor_new_posts()
 
             if new_posts:
                 print(f"✅ 发现 {len(new_posts)} 个新帖子")
-                # 🎯 关键修复：根据爬虫类型传递不同格式的任务信息
+                # 🎯 处理每个帖子，构建任务数据
                 tasks = []
                 for post in new_posts:
-                    if USE_FULL_CRAWLER:
-                        # 完整版：传递详细信息（包括封面标题）
-                        # 🎯 关键修复：从cover_info中提取封面标题
-                        cover_info = post.get('cover_info', {})
-                        cover_title_up = cover_info.get('cover_title_up', '')
-                        cover_title_down = cover_info.get('cover_title_down', '')
+                    # 🎯 从cover_info中提取封面标题
+                    cover_info = post.get('cover_info', {})
+                    cover_title_up = cover_info.get('cover_title_up', '')
+                    cover_title_down = cover_info.get('cover_title_down', '')
 
-                        task = {
-                            'title': post.get('title', '未知标题'),
+                    task = {
+                        'title': post.get('title', '未知标题'),
+                        'post_url': post.get('thread_url'),
+                        'content': post.get('content', ''),
+                        'core_text': post.get('core_text', ''),  # 🎯 核心文本用于热词提取
+                        'author': post.get('author', ''),
+                        'cover_title_up': cover_title_up,
+                        'cover_title_down': cover_title_down,
+                        'cover_info_raw': post.get('content', ''),
+                        'video_urls': post.get('video_urls', []),
+                        'audio_urls': post.get('audio_urls', []),  # 🎯 音频链接
+                        'original_filenames': post.get('original_filenames', []),
+                        'metadata': {
+                            'post_id': post.get('thread_id'),
                             'post_url': post.get('thread_url'),
-                            'content': post.get('content', ''),
-                            'core_text': post.get('core_text', ''),  # 🎯 添加核心文本用于热词提取
+                            'thread_id': post.get('thread_id'),
                             'author': post.get('author', ''),
                             'cover_title_up': cover_title_up,
                             'cover_title_down': cover_title_down,
-                            'cover_info_raw': post.get('content', ''),  # 使用原始内容作为cover_info_raw
-                            'video_urls': post.get('video_urls', []),
-                            'original_filenames': post.get('original_filenames', []),
-                            'metadata': {
-                                'post_id': post.get('thread_id'),
-                                'post_url': post.get('thread_url'),
-                                'thread_id': post.get('thread_id'),
-                                'author': post.get('author', ''),
-                                'cover_title_up': cover_title_up,
-                                'cover_title_down': cover_title_down,
-                                'discovered_at': datetime.now().isoformat(),
-                                'forum_name': post.get('forum_name', '智能剪口播'),
-                                'source': 'forum'
-                            }
+                            'discovered_at': datetime.now().isoformat(),
+                            'forum_name': post.get('forum_name', '智能剪口播'),
+                            'source': 'forum'
                         }
-                        detected_type = self._detect_task_type(task)
-                        task['task_type'] = detected_type.value
-                        task['metadata']['task_type'] = detected_type.value
-                        if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
-                            task['source'] = 'forum_tts'
-                            payload = {
-                                'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
-                                'title': task.get('title', ''),
-                                'content': task.get('content', ''),
-                                'author': task.get('author', ''),
-                                'forum_name': task['metadata'].get('forum_name'),
-                                'post_id': task['metadata'].get('post_id'),
-                                'post_url': task.get('post_url'),
-                            }
-                            task['payload'] = payload
-                            task['metadata']['source'] = 'forum_tts'
-                        else:
-                            task['metadata']['source'] = 'forum'
-                        print(f"📝 准备分发完整帖子信息: {task['title']}")
-                        if task['cover_title_up']:
-                            print(f"📝 封面标题上: {task['cover_title_up']}")
-                        if task['cover_title_down']:
-                            print(f"📝 封面标题下: {task['cover_title_down']}")
-                        if task['video_urls']:
-                            print(f"📝 视频链接数量: {len(task['video_urls'])}")
+                    }
+
+                    # 🎯 检测任务类型
+                    detected_type = self._detect_task_type(task)
+                    task['task_type'] = detected_type.value
+                    task['metadata']['task_type'] = detected_type.value
+
+                    # 🎯 为TTS/音色克隆任务构建payload
+                    if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                        task['source'] = 'forum_tts'
+
+                        # 提取音频URL（优先）或视频URL
+                        audio_urls = post.get('audio_urls', [])
+                        video_urls = post.get('video_urls', [])
+                        media_url = audio_urls[0] if audio_urls else (video_urls[0] if video_urls else '')
+
+                        if media_url:
+                            print(f"🎵 提取到媒体URL: {media_url}")
+
+                        payload = {
+                            'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
+                            'title': task.get('title', ''),
+                            'content': task.get('content', ''),
+                            'audio_url': media_url,  # 🎯 音频/视频URL
+                            'author': task.get('author', ''),
+                            'forum_name': task['metadata'].get('forum_name'),
+                            'post_id': task['metadata'].get('post_id'),
+                            'post_url': task.get('post_url'),
+                        }
+                        task['payload'] = payload
+                        task['metadata']['source'] = 'forum_tts'
                     else:
-                        # 简化版：只传递基本信息
-                        task = {
-                            'title': post.get('title', '未知标题'),
-                            'content': post.get('content', ''),  # 🎯 添加content字段用于任务类型检测
-                            'post_url': post.get('thread_url'),
-                            'metadata': {
-                                'post_id': post.get('thread_id'),
-                                'post_url': post.get('thread_url'),
-                                'discovered_at': datetime.now().isoformat(),
-                                'forum_name': post.get('forum_name', '智能剪口播'),
-                                'author': post.get('author', ''),
-                                'source': 'forum'
-                            }
-                        }
-                        detected_type = self._detect_task_type(task)
-                        task['task_type'] = detected_type.value
-                        task['metadata']['task_type'] = detected_type.value
-                        if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
-                            task['source'] = 'forum_tts'
-                            payload = {
-                                'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
-                                'title': task.get('title', ''),
-                                'content': '',
-                                'author': task['metadata'].get('author'),
-                                'forum_name': task['metadata'].get('forum_name'),
-                                'post_id': task['metadata'].get('post_id'),
-                                'post_url': task.get('post_url'),
-                            }
-                            task['payload'] = payload
-                            task['metadata']['source'] = 'forum_tts'
-                        print(f"📝 准备分发基本帖子信息: {task['title']}")
+                        task['metadata']['source'] = 'forum'
+
+                    print(f"📝 准备分发帖子: {task['title']}")
+                    if task['cover_title_up']:
+                        print(f"   📝 封面标题上: {task['cover_title_up']}")
+                    if task['cover_title_down']:
+                        print(f"   📝 封面标题下: {task['cover_title_down']}")
+                    if task.get('video_urls'):
+                        print(f"   🎬 视频链接数量: {len(task['video_urls'])}")
+                    if task.get('audio_urls'):
+                        print(f"   🎵 音频链接数量: {len(task['audio_urls'])}")
 
                     tasks.append(task)
                     print(f"🔗 帖子链接: {task['post_url']}")

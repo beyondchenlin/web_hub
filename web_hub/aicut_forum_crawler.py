@@ -935,65 +935,7 @@ class AicutForumCrawler:
             print(f"❌ 监控新帖失败: {e}")
             return []
 
-    def get_new_posts_simple(self) -> List[Dict[str, Any]]:
-        """简化的新帖监控：只获取帖子列表，不解析内容"""
-        try:
-            print(f"🔍 开始监控智能剪口播板块 ({datetime.now().strftime('%H:%M:%S')})")
 
-            # 获取所有帖子（只有基本信息，不解析内容）
-            threads = self.get_forum_threads()
-
-            new_posts = []
-
-            # 生产模式：只处理新帖子，持久化去重
-            if not self.first_check_completed:
-                # 首次启动：标记现有帖子为已处理，不实际处理
-                print("🔄 生产模式首次启动，标记现有帖子为已处理...")
-                for thread in threads:
-                    thread_id = thread['thread_id']
-                    self.mark_post_processed(thread_id)
-                    print(f"📝 标记已存在帖子: {thread['title']} (ID: {thread_id})")
-
-                self.first_check_completed = True
-                print(f"✅ 首次检查完成，已标记 {len(threads)} 个现有帖子")
-                print("🔍 下次检查将处理新发布的帖子")
-                return []
-
-            # 正常监控：只处理新帖子
-            print("🚀 生产模式：只检查新帖子")
-            for thread in threads:
-                thread_id = thread['thread_id']
-
-                # 跳过已处理的帖子
-                if thread_id in self.processed_threads:
-                    continue
-
-                print(f"🆕 发现新帖子: {thread['title']} (ID: {thread_id})")
-
-                # 只返回基本信息，不解析内容
-                new_posts.append({
-                    'thread_id': thread_id,
-                    'title': thread['title'],
-                    'thread_url': thread['thread_url'],
-                    'author': thread.get('author', '未知作者'),
-                    'forum_name': '智能剪口播'
-                })
-
-                # 标记为已处理
-                self.mark_post_processed(thread_id)
-
-            if new_posts:
-                print(f"✅ 发现 {len(new_posts)} 个新帖子")
-            else:
-                print("📭 暂无新帖子")
-
-            return new_posts
-
-        except Exception as e:
-            print(f"❌ 简化监控新帖异常: {e}")
-            import traceback
-            traceback.print_exc()
-            return []
 
     def reply_to_thread(self, thread_id: str, content: str, video_files: List[str] = None) -> bool:
         """回复帖子，支持上传视频文件"""

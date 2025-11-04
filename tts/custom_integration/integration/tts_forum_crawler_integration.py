@@ -87,29 +87,29 @@ class TTSForumCrawlerIntegration:
     def get_new_posts(self) -> List[Dict]:
         """
         获取新帖子
-        
+
         Returns:
             新帖子列表，每个帖子包含:
             - thread_id: 帖子ID
             - title: 帖子标题
             - thread_url: 帖子URL
             - author: 作者
-            - author_id: 作者ID
-            - post_time: 发布时间
             - content: 帖子内容
-            - tags: 标签列表
-            - attachments: 附件列表
+            - video_urls: 视频链接列表
+            - audio_urls: 音频链接列表
+            - cover_info: 封面信息
+            - 等详细信息
         """
         try:
             if not self.crawler:
                 logger.error("❌ 论坛爬虫不可用")
                 return []
-            
+
             logger.info("🔍 获取新帖子...")
-            
-            # 调用爬虫的简化方法获取新帖子
-            new_posts = self.crawler.get_new_posts_simple()
-            
+
+            # 🎯 使用完整版方法：一次性获取新帖子列表+详细内容
+            new_posts = self.crawler.monitor_new_posts()
+
             if not new_posts:
                 logger.info("📭 暂无新帖子")
                 return []

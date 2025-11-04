@@ -120,40 +120,29 @@ class TTSForumMonitor:
         if not self.forum_crawler:
             logger.warning("⚠️ 论坛爬虫未初始化")
             return
-        
+
         try:
             logger.info("🔍 检查新帖子...")
-            
-            # 获取新帖子
-            new_posts = self.forum_crawler.get_new_posts_simple()
-            
+
+            # 🎯 使用完整版方法：一次性获取新帖子列表+详细内容
+            new_posts = self.forum_crawler.monitor_new_posts()
+
             if not new_posts:
                 logger.debug("📭 暂无新帖子")
                 return
-            
+
             logger.info(f"🆕 发现 {len(new_posts)} 个新帖子")
-            
-            # 获取每个帖子的详细内容
+
+            # 直接添加到处理队列（已包含详细内容）
             for post in new_posts:
                 try:
                     thread_id = post.get('thread_id')
-                    thread_url = post.get('thread_url')
-                    
-                    logger.info(f"📝 获取帖子详情: {thread_id}")
-                    
-                    # 获取帖子详细内容
-                    thread_content = self.forum_crawler.get_thread_content(thread_id)
-                    
-                    if thread_content:
-                        # 合并帖子信息
-                        post.update(thread_content)
-                        
-                        # 添加到处理队列
-                        self.request_queue.put(post)
-                        logger.info(f"✅ 帖子已加入处理队列: {thread_id}")
-                    else:
-                        logger.warning(f"⚠️ 无法获取帖子详情: {thread_id}")
-                
+                    logger.info(f"📝 处理帖子: {thread_id}")
+
+                    # 添加到处理队列
+                    self.request_queue.put(post)
+                    logger.info(f"✅ 帖子已加入处理队列: {thread_id}")
+
                 except Exception as e:
                     logger.error(f"❌ 处理帖子异常: {e}")
         
