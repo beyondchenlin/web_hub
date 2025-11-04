@@ -486,9 +486,31 @@ class TTSAPIService:
                     import subprocess
                     temp_wav = audio_file.replace('.amr', '_converted.wav')
 
+                    # 🎯 使用项目内置的FFmpeg
+                    # 路径：D:\clonetts\tts\indextts2\py312\ffmpeg\bin\ffmpeg.exe
+                    ffmpeg_path = os.path.join(
+                        os.path.dirname(__file__),
+                        '..',
+                        '..',
+                        'indextts2',
+                        'py312',
+                        'ffmpeg',
+                        'bin',
+                        'ffmpeg.exe'
+                    )
+                    ffmpeg_path = os.path.abspath(ffmpeg_path)
+
+                    # 如果内置FFmpeg不存在，尝试使用系统FFmpeg
+                    if not os.path.exists(ffmpeg_path):
+                        logger.warning(f"   ⚠️ 内置FFmpeg不存在: {ffmpeg_path}")
+                        ffmpeg_path = 'ffmpeg'  # 使用系统PATH中的ffmpeg
+                        logger.info(f"   尝试使用系统FFmpeg")
+                    else:
+                        logger.info(f"   使用内置FFmpeg: {ffmpeg_path}")
+
                     # 使用FFmpeg转换AMR到WAV
                     cmd = [
-                        'ffmpeg', '-i', audio_file,
+                        ffmpeg_path, '-i', audio_file,
                         '-ar', '22050',  # 采样率
                         '-ac', '1',      # 单声道
                         '-y',            # 覆盖输出文件
