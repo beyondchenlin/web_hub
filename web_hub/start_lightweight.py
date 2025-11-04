@@ -228,6 +228,10 @@ def add_cluster_api(processor):
             task_type_str = task_data.get('task_type') or received_metadata.get('task_type', 'video')
             print(f"🔍 [DEBUG] 接收到的task_type: {task_type_str}")
 
+            # 🎯 提取payload（包含audio_url等TTS任务需要的数据）
+            task_payload = task_data.get('payload', {})
+            print(f"🔍 [DEBUG] 接收到的payload: {task_payload}")
+
             # 提取封面标题信息
             cover_title_up = received_metadata.get('cover_title_up', '')
             cover_title_middle = received_metadata.get('cover_title_middle', '')
@@ -293,6 +297,7 @@ def add_cluster_api(processor):
                 source_url=url,
                 priority=TaskPriority.NORMAL,
                 metadata=task_metadata,
+                payload=task_payload,  # 🎯 传递payload（包含audio_url等）
                 task_type=task_type  # 🎯 添加任务类型
             )
             print(f"🚨 DEBUG: 创建任务结果: {task_id}")
