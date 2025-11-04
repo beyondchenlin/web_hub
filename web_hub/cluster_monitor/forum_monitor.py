@@ -159,7 +159,16 @@ class ForumMonitor:
                     if self.forum_crawler.logged_in:
                         print("✅ 论坛爬虫已就绪（已登录）")
                     else:
-                        print("⚠️ 论坛爬虫未登录，将在需要时自动登录")
+                        print("⚠️ 论坛爬虫未登录，尝试自动登录...")
+                        # 🎯 关键修复：监控节点启动时主动登录
+                        if username and password:
+                            login_success = self.forum_crawler.login()
+                            if login_success:
+                                print("✅ 论坛登录成功")
+                            else:
+                                print("⚠️ 论坛登录失败，将以游客模式运行")
+                        else:
+                            print("⚠️ 未配置论坛账号，将以游客模式运行")
                 else:
                     print("📋 使用简化版论坛爬虫（基础功能）")
                     self.forum_crawler = SimpleForumCrawler(
@@ -738,6 +747,7 @@ class ForumMonitor:
                         # 简化版：只传递基本信息
                         task = {
                             'title': post.get('title', '未知标题'),
+                            'content': post.get('content', ''),  # 🎯 添加content字段用于任务类型检测
                             'post_url': post.get('thread_url'),
                             'metadata': {
                                 'post_id': post.get('thread_id'),
