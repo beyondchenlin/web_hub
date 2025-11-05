@@ -689,6 +689,7 @@ class ForumMonitor:
                         'video_urls': post.get('video_urls', []),
                         'audio_urls': post.get('audio_urls', []),  # 🎯 音频链接
                         'original_filenames': post.get('original_filenames', []),
+                        'category': post.get('category', ''),  # 🎯 Discuz分类信息字段
                         'metadata': {
                             'post_id': post.get('thread_id'),
                             'post_url': post.get('thread_url'),
@@ -698,98 +699,22 @@ class ForumMonitor:
                             'cover_title_down': cover_title_down,
                             'discovered_at': datetime.now().isoformat(),
                             'forum_name': post.get('forum_name', '智能剪口播'),
-                            'source': 'forum'
+                            'source': 'forum',
+                            'category': post.get('category', '')  # 🎯 Discuz分类信息字段
                         }
                     }
 
-                    # 🎯 检测任务类型
-                    detected_type = self._detect_task_type(task)
-                    task['task_type'] = detected_type.value
-                    task['metadata']['task_type'] = detected_type.value
+                    # 🎯 监控节点只负责传递原始数据，不做任务类型判断
+                    # 工作节点会根据category字段自己判断任务类型并处理
 
-                    # 🎯 为TTS/音色克隆任务构建payload
-                    if detected_type in {TaskType.TTS, TaskType.VOICE_CLONE}:
-                        task['source'] = 'forum_tts'
+                    print(f"📦 准备分发任务: {task.get('title')}")
+                    if task.get('category'):
+                        print(f"   分类: {task.get('category')}")
+                    print(f"   视频: {len(task.get('video_urls', []))} 个")
+                    print(f"   音频: {len(task.get('audio_urls', []))} 个")
 
-                        # 提取音频URL（优先）或视频URL
-                        audio_urls = post.get('audio_urls', [])
-                        video_urls = post.get('video_urls', [])
-                        media_url = audio_urls[0] if audio_urls else (video_urls[0] if video_urls else '')
-
-                        if media_url:
-                            print(f"🎵 提取到媒体URL: {media_url}")
-
-                        # 🎯 使用TTSRequestParser解析帖子内容，提取参数
-                        parsed_params = {}
-                        try:
-                            # 动态导入TTSRequestParser
-                            import sys
-                            import os
-                            tts_integration_path = os.path.join(os.path.dirname(__file__), '..', '..', 'tts', 'custom_integration', 'integration')
-                            if tts_integration_path not in sys.path:
-                                sys.path.insert(0, tts_integration_path)
-
-                            from tts_request_parser import TTSRequestParser
-
-                            if detected_type == TaskType.VOICE_CLONE:
-                                # 解析音色克隆请求
-                                success, params = TTSRequestParser.parse_voice_clone_request(
-                                    task.get('title', ''),
-                                    task.get('content', ''),
-                                    audio_urls=audio_urls,
-                                    video_urls=video_urls
-                                )
-                                if success:
-                                    parsed_params = params
-                                    print(f"✅ 解析音色克隆参数成功: 音色名称={params.get('clone_voice_name')}")
-                                else:
-                                    print(f"⚠️ 解析音色克隆参数失败: {params.get('error')}")
-                            else:
-                                # 解析TTS请求
-                                success, params = TTSRequestParser.parse_tts_request(
-                                    task.get('title', ''),
-                                    task.get('content', '')
-                                )
-                                if success:
-                                    parsed_params = params
-                                    print(f"✅ 解析TTS参数成功: 音色={params.get('voice_name')}, 文本长度={len(params.get('tts_text', ''))}")
-                                else:
-                                    print(f"⚠️ 解析TTS参数失败: {params.get('error')}")
-                        except Exception as e:
-                            print(f"⚠️ TTSRequestParser解析异常: {e}")
-
-                        payload = {
-                            'request_type': 'voice_clone' if detected_type == TaskType.VOICE_CLONE else 'tts',
-                            'title': task.get('title', ''),
-                            'content': task.get('content', ''),
-                            'audio_url': media_url,  # 🎯 音频/视频URL
-                            'author': task.get('author', ''),
-                            'forum_name': task['metadata'].get('forum_name'),
-                            'post_id': task['metadata'].get('post_id'),
-                            'post_url': task.get('post_url'),
-                        }
-
-                        # 🎯 合并解析出的参数
-                        if parsed_params:
-                            payload.update(parsed_params)
-
-                        task['payload'] = payload
-                        task['metadata']['source'] = 'forum_tts'
-                    else:
-                        task['metadata']['source'] = 'forum'
-
-                    print(f"📝 准备分发帖子: {task['title']}")
-                    if task['cover_title_up']:
-                        print(f"   📝 封面标题上: {task['cover_title_up']}")
-                    if task['cover_title_down']:
-                        print(f"   📝 封面标题下: {task['cover_title_down']}")
-                    if task.get('video_urls'):
-                        print(f"   🎬 视频链接数量: {len(task['video_urls'])}")
-                    if task.get('audio_urls'):
-                        print(f"   🎵 音频链接数量: {len(task['audio_urls'])}")
-
+                    # 🎯 所有任务都添加到列表，由工作节点决定如何处理
                     tasks.append(task)
-                    print(f"🔗 帖子链接: {task['post_url']}")
 
                 return tasks
             else:
@@ -840,58 +765,8 @@ class ForumMonitor:
             machine.current_tasks = 0
             machine.last_error = str(e)[:100]  # 限制错误信息长度
     
-    def _detect_task_type(self, task_data: Dict) -> TaskType:
-        """
-        检测任务类型
-
-        🎯 优先使用Discuz论坛的分类字段（category），更精确可靠
-        - 制作AI声音 → TTS任务
-        - 音色克隆 → 音色克隆任务
-        - 其他 → 视频任务
-        """
-        # 🎯 方法1: 优先使用论坛分类字段（最可靠）
-        category = (task_data.get('category') or '').strip()
-        if category:
-            print(f"🏷️ 检测到论坛分类: {category}")
-
-            # 音色克隆分类
-            if '音色克隆' in category:
-                print(f"✅ 根据分类判断为: 音色克隆")
-                return TaskType.VOICE_CLONE
-
-            # TTS分类
-            if '制作AI声音' in category or '制作ai声音' in category:
-                print(f"✅ 根据分类判断为: TTS")
-                return TaskType.TTS
-
-        # 🎯 方法2: 回退到标题和内容检测（兼容旧数据）
-        title = (task_data.get('title') or '')
-        content = (task_data.get('content') or '')
-
-        # 音色克隆标记
-        clone_markers = ['【音色克隆】', '[音色克隆]', '音色克隆']
-
-        # TTS标记
-        tts_markers = [
-            '【制作AI声音】', '[制作AI声音]', '制作AI声音',
-            '【制作ai声音】', '[制作ai声音]', '制作ai声音'
-        ]
-
-        # 检查音色克隆（优先级高）
-        for marker in clone_markers:
-            if marker in title or marker in content:
-                print(f"✅ 根据内容标记判断为: 音色克隆")
-                return TaskType.VOICE_CLONE
-
-        # 检查TTS
-        for marker in tts_markers:
-            if marker in title or marker in content:
-                print(f"✅ 根据内容标记判断为: TTS")
-                return TaskType.TTS
-
-        # 默认为视频任务
-        print(f"✅ 默认判断为: 视频")
-        return TaskType.VIDEO
+    # 🎯 监控节点不再需要判断任务类型
+    # 工作节点会根据category字段自己判断
 
     def _build_queue_payload(self, post_data: Dict, formatted_task: Dict) -> Dict:
         metadata = post_data.get('metadata', {})
