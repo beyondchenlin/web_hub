@@ -1231,6 +1231,7 @@ class TaskProcessor:
                 'cover_info': cover_info,
                 'title': content_info.get('title', ''),
                 'author': content_info.get('author', ''),
+                'category': content_info.get('category', ''),  # 🎯 添加Discuz分类信息字段
                 # 🎯 直接从cover_info提取封面标题到metadata
                 'cover_title_up': cover_info.get('cover_title_up', ''),
                 'cover_title_middle': cover_info.get('cover_title_middle', ''),

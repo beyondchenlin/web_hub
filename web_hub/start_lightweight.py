@@ -224,13 +224,17 @@ def add_cluster_api(processor):
             received_metadata = task_data.get('metadata', {})
             print(f"🔍 [DEBUG] 接收到的metadata: {received_metadata}")
 
-            # 🎯 提取任务类型
+            # 🎯 提取任务类型（监控节点不再发送，工作节点自己判断）
             task_type_str = task_data.get('task_type') or received_metadata.get('task_type', 'video')
             print(f"🔍 [DEBUG] 接收到的task_type: {task_type_str}")
 
             # 🎯 提取payload（包含audio_url等TTS任务需要的数据）
             task_payload = task_data.get('payload', {})
             print(f"🔍 [DEBUG] 接收到的payload: {task_payload}")
+
+            # 🎯 提取Discuz分类信息字段（用于任务类型判断）
+            category = task_data.get('category', '') or received_metadata.get('category', '')
+            print(f"🔍 [DEBUG] 接收到的category: {category}")
 
             # 提取封面标题信息
             cover_title_up = received_metadata.get('cover_title_up', '')
@@ -259,7 +263,9 @@ def add_cluster_api(processor):
                 'original_filename': received_metadata.get('original_filename', ''),
                 'cover_info_raw': received_metadata.get('cover_info_raw', ''),
                 'forum_source': received_metadata.get('forum_source', 'aicut_forum'),
-                'forum_post_data': forum_post_data
+                'forum_post_data': forum_post_data,
+                # 🎯 传递category字段，用于任务类型判断
+                'category': category
             }
 
             print(f"🔍 [DEBUG] 创建的task_metadata封面标题:")
