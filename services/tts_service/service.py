@@ -160,9 +160,39 @@ class TTSTaskService:
         content = forum_payload.get('content', '')
         core_text = forum_payload.get('core_text', '')  # 优先使用过滤后的文本
 
-        # 🎯 从content中解析音色名称（如果有"选择音色:"字段）
+        # 🎯 使用TTSRequestParser解析帖子内容，提取参数
+        parsed_params = {}
+        if request_type == 'voice_clone':
+            try:
+                # 动态导入TTSRequestParser
+                import sys
+                import os
+                tts_integration_path = os.path.join(os.path.dirname(__file__), '..', '..', 'tts', 'custom_integration', 'integration')
+                if tts_integration_path not in sys.path:
+                    sys.path.insert(0, tts_integration_path)
+
+                from tts_request_parser import TTSRequestParser
+
+                # 解析音色克隆请求
+                audio_urls = forum_payload.get('audio_urls', [])
+                video_urls = forum_payload.get('video_urls', [])
+                success, params = TTSRequestParser.parse_voice_clone_request(
+                    title,
+                    content,
+                    audio_urls=audio_urls,
+                    video_urls=video_urls
+                )
+                if success:
+                    parsed_params = params
+                    print(f"✅ 解析音色克隆参数成功: 音色名称={params.get('clone_voice_name')}")
+                else:
+                    print(f"⚠️ 解析音色克隆参数失败: {params.get('error')}")
+            except Exception as e:
+                print(f"⚠️ TTSRequestParser解析异常: {e}")
+
+        # 🎯 从content中解析音色名称（如果有"选择音色:"字段，用于TTS请求）
         voice_name = forum_payload.get('voice_name', '')
-        if not voice_name and content:
+        if not voice_name and content and request_type == 'tts':
             import re
             # 查找"选择音色:"后面的内容
             voice_match = re.search(r'选择音色\s*[:：]\s*([^\n]+)', content)
@@ -172,14 +202,17 @@ class TTSTaskService:
 
         if request_type == 'voice_clone':
             # 音色克隆请求
+            # 🎯 优先使用解析出的参数，回退到原始数据
+            clone_voice_name = parsed_params.get('clone_voice_name') or forum_payload.get('clone_voice_name') or title or '未命名音色'
+
             return {
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
-                'voice_name': forum_payload.get('clone_voice_name', title or '未命名音色'),
-                'description': forum_payload.get('description', core_text or content),
+                'voice_name': clone_voice_name,
+                'description': parsed_params.get('description') or forum_payload.get('description') or core_text or content,
                 'audio_file': audio_file,
                 'duration': 0,  # 需要实际计算音频时长
-                'is_public': forum_payload.get('clone_is_public', False),
+                'is_public': parsed_params.get('clone_is_public', False) or forum_payload.get('clone_is_public', False),
                 # 保留原始论坛信息
                 'thread_id': forum_payload.get('thread_id'),
                 'post_id': forum_payload.get('post_id'),
