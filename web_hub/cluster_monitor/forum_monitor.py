@@ -841,21 +841,45 @@ class ForumMonitor:
             machine.last_error = str(e)[:100]  # 限制错误信息长度
     
     def _detect_task_type(self, task_data: Dict) -> TaskType:
-        title = (task_data.get('title') or '').lower()
-        content = (task_data.get('content') or '').lower()
+        """
+        检测任务类型
 
-        clone_keywords = [
-            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音', '语音克隆', '【音色克隆】'
-        ]
-        tts_keywords = [
-            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成',
-            '制作ai声音', 'ai声音', '【制作ai声音】', '制作AI声音', 'AI声音', '【制作AI声音】'
+        🎯 精确匹配论坛实际使用的标记：
+        - 制作AI声音 → TTS任务
+        - 音色克隆 → 音色克隆任务
+        - 其他 → 视频任务
+        """
+        title = (task_data.get('title') or '')
+        content = (task_data.get('content') or '')
+
+        # 🎯 音色克隆标记（论坛实际使用的格式）
+        clone_markers = [
+            '【音色克隆】',
+            '[音色克隆]',
+            '音色克隆'
         ]
 
-        if any(keyword in title or keyword in content for keyword in clone_keywords):
-            return TaskType.VOICE_CLONE
-        if any(keyword in title or keyword in content for keyword in tts_keywords):
-            return TaskType.TTS
+        # 🎯 TTS标记（论坛实际使用的格式）
+        tts_markers = [
+            '【制作AI声音】',
+            '[制作AI声音]',
+            '制作AI声音',
+            '【制作ai声音】',  # 小写变体
+            '[制作ai声音]',
+            '制作ai声音'
+        ]
+
+        # 检查音色克隆（优先级高）
+        for marker in clone_markers:
+            if marker in title or marker in content:
+                return TaskType.VOICE_CLONE
+
+        # 检查TTS
+        for marker in tts_markers:
+            if marker in title or marker in content:
+                return TaskType.TTS
+
+        # 默认为视频任务
         return TaskType.VIDEO
 
     def _build_queue_payload(self, post_data: Dict, formatted_task: Dict) -> Dict:

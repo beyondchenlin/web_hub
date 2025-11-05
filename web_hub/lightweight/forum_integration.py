@@ -345,30 +345,45 @@ class ForumIntegration:
             return []
     
     def _detect_task_type(self, post: Dict[str, Any]) -> 'TaskType':
-        """检测帖子的任务类型"""
+        """
+        检测帖子的任务类型
+
+        🎯 精确匹配论坛实际使用的标记：
+        - 制作AI声音 → TTS任务
+        - 音色克隆 → 音色克隆任务
+        - 其他 → 视频任务
+        """
         from shared.task_model import TaskType
 
-        title = (post.get('title') or '').lower()
-        content = (post.get('content') or '').lower()
+        title = (post.get('title') or '')
+        content = (post.get('content') or '')
 
-        # 音色克隆关键词
-        clone_keywords = [
-            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音',
-            '语音克隆', '【音色克隆】'
-        ]
-        # TTS合成关键词
-        tts_keywords = [
-            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成',
-            '制作ai声音', 'ai声音', '【制作ai声音】'
+        # 🎯 音色克隆标记（论坛实际使用的格式）
+        clone_markers = [
+            '【音色克隆】',
+            '[音色克隆]',
+            '音色克隆'
         ]
 
-        # 检查是否为音色克隆请求
-        if any(keyword in title or keyword in content for keyword in clone_keywords):
-            return TaskType.VOICE_CLONE
+        # 🎯 TTS标记（论坛实际使用的格式）
+        tts_markers = [
+            '【制作AI声音】',
+            '[制作AI声音]',
+            '制作AI声音',
+            '【制作ai声音】',  # 小写变体
+            '[制作ai声音]',
+            '制作ai声音'
+        ]
 
-        # 检查是否为TTS合成请求
-        if any(keyword in title or keyword in content for keyword in tts_keywords):
-            return TaskType.TTS
+        # 检查音色克隆（优先级高）
+        for marker in clone_markers:
+            if marker in title or marker in content:
+                return TaskType.VOICE_CLONE
+
+        # 检查TTS
+        for marker in tts_markers:
+            if marker in title or marker in content:
+                return TaskType.TTS
 
         # 默认为视频处理
         return TaskType.VIDEO
