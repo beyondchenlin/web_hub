@@ -845,10 +845,11 @@ class ForumMonitor:
         content = (task_data.get('content') or '').lower()
 
         clone_keywords = [
-            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音', '语音克隆'
+            '音色克隆', '声音克隆', 'voice clone', '克隆音色', '克隆声音', '语音克隆', '【音色克隆】'
         ]
         tts_keywords = [
-            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成'
+            'tts', '语音合成', '文本转语音', '配音', '朗读', '语音生成',
+            '制作ai声音', 'ai声音', '【制作ai声音】', '制作AI声音', 'AI声音', '【制作AI声音】'
         ]
 
         if any(keyword in title or keyword in content for keyword in clone_keywords):
