@@ -39,6 +39,43 @@ class TTSTaskService:
         if path_str not in sys.path:
             sys.path.insert(0, path_str)
 
+    def _get_user_last_cloned_voice(self, user_id: str) -> Optional[str]:
+        """
+        获取用户最后一次克隆的音色
+
+        Args:
+            user_id: 用户ID
+
+        Returns:
+            音色ID，如果用户没有克隆过音色则返回None
+        """
+        try:
+            import sqlite3
+            from tts_config import DATABASE_PATH
+
+            conn = sqlite3.connect(DATABASE_PATH)
+            cursor = conn.cursor()
+
+            # 查询该用户最后克隆的音色（按创建时间倒序）
+            cursor.execute('''
+                SELECT voice_id FROM voices
+                WHERE owner_id = ?
+                ORDER BY created_at DESC
+                LIMIT 1
+            ''', (user_id,))
+
+            result = cursor.fetchone()
+            conn.close()
+
+            if result:
+                return result[0]
+            else:
+                return None
+
+        except Exception as e:
+            print(f"⚠️ 查询用户音色失败: {e}")
+            return None
+
     def _load_api_service(self):
         if self._api_service_cls is None:
             from tts_api_service import TTSAPIService
@@ -224,9 +261,17 @@ class TTSTaskService:
 
             # 🎯 处理"本人音色"的情况
             if voice_name in ['本人音色', '']:
-                # 如果用户没有克隆过音色，使用默认音色
-                voice_name = '苏瑶'
-                print(f"💡 用户选择'本人音色'但未克隆，使用默认音色: {voice_name}")
+                # 查询用户最后一次克隆的音色
+                user_id = forum_payload.get('author_id', '')
+                last_voice = self._get_user_last_cloned_voice(user_id)
+
+                if last_voice:
+                    voice_name = last_voice
+                    print(f"💡 用户选择'本人音色'，使用最后克隆的音色: {voice_name}")
+                else:
+                    # 如果用户没有克隆过音色，使用默认音色
+                    voice_name = '苏瑶'
+                    print(f"💡 用户选择'本人音色'但未克隆过，使用默认音色: {voice_name}")
 
             return {
                 'request_id': request_id,
