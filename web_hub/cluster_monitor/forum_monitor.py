@@ -674,6 +674,7 @@ class ForumMonitor:
                         'content': post.get('content', ''),
                         'core_text': post.get('core_text', ''),  # 🎯 核心文本用于热词提取
                         'author': post.get('author', ''),
+                        'author_id': post.get('author_id', ''),  # 🎯 作者ID
                         'cover_title_up': cover_title_up,
                         'cover_title_down': cover_title_down,
                         'cover_info_raw': post.get('content', ''),
@@ -686,6 +687,7 @@ class ForumMonitor:
                             'source_url': post.get('thread_url'),  # 统一使用 source_url
                             'thread_id': post.get('thread_id'),
                             'author': post.get('author', ''),
+                            'author_id': post.get('author_id', ''),  # 🎯 作者ID
                             'cover_title_up': cover_title_up,
                             'cover_title_down': cover_title_down,
                             'discovered_at': datetime.now().isoformat(),
