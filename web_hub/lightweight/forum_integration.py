@@ -319,6 +319,7 @@ class ForumIntegration:
                     'thread_id': post['thread_id'],
                     'title': post.get('title', ''),
                     'content': post.get('content', ''),  # 🔥 关键修复：添加内容字段
+                    'core_text': post.get('core_text', ''),  # 🎯 关键：添加core_text字段（已过滤表单字段）
                     'author_id': author_id,
                     'author_name': author_name,
                     'video_url': primary_video_url,
@@ -532,12 +533,17 @@ class ForumIntegration:
                 'post_id': post_id,
                 'title': post.get('title', ''),
                 'content': post.get('content', ''),
+                'core_text': post.get('core_text', ''),  # 🎯 关键：传递core_text（已过滤表单字段）
                 'author_id': author_id,
                 'author_name': author_name,
                 'audio_urls': post.get('audio_urls', []),
                 'video_urls': post.get('video_urls', []),
                 'post_url': post.get('post_url', ''),
             }
+
+            # 🔍 调试：显示将要合成的文本
+            core_text_preview = post.get('core_text', '')[:100] if post.get('core_text') else '(空)'
+            print(f"📝 将要合成的文本: {core_text_preview}...")
 
             # 准备任务元数据
             task_metadata = {
@@ -670,6 +676,7 @@ class ForumIntegration:
                 'thread_id': post_id,
                 'title': post_content.get('title', ''),
                 'content': post_content.get('content', ''),
+                'core_text': post_content.get('core_text', ''),  # 🎯 关键：添加core_text字段（已过滤表单字段）
                 'author_id': author_id,
                 'author_name': author_name,
                 'video_url': primary_video_url,
@@ -685,6 +692,7 @@ class ForumIntegration:
 
             print(f"🖼️ 格式化后封面标题上: '{formatted_post['cover_title_up']}'")
             print(f"🖼️ 格式化后封面标题下: '{formatted_post['cover_title_down']}'")
+            print(f"📝 格式化后核心文本: '{formatted_post['core_text'][:100]}...'" if formatted_post['core_text'] else "📝 核心文本为空")
 
             # 🎯 第3步：处理格式化后的帖子（与单机模式相同）
             print("🔧 调用单机模式的帖子处理逻辑")
