@@ -266,7 +266,13 @@ def add_cluster_api(processor):
                 'forum_source': received_metadata.get('forum_source', 'aicut_forum'),
                 'forum_post_data': forum_post_data,
                 # 🎯 传递category字段，用于任务类型判断
-                'category': category
+                'category': category,
+                # 🎯 关键修复：提取TTS服务需要的字段到顶层
+                'content': forum_post_data.get('content', ''),
+                'core_text': forum_post_data.get('core_text', ''),
+                'thread_id': post_id,  # 帖子ID
+                'author_id': received_metadata.get('author_id', ''),
+                'author_name': received_metadata.get('author_name', '')
             }
 
             print(f"🔍 [DEBUG] 创建的task_metadata封面标题:")
