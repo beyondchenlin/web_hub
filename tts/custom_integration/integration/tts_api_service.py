@@ -53,16 +53,19 @@ class TTSAPIService:
         self.timeout = API_TIMEOUT
         self.max_retries = API_MAX_RETRIES
         self.retry_delay = API_RETRY_DELAY
-        
+
+        # 🎯 初始化数据库连接
+        self.db_conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
+
         # 初始化管理器
         self.user_sync = TTSForumUserSync()
         self.permission_manager = PermissionManager()
-        
+
         # 请求队列和状态跟踪
         self.request_queue = queue.Queue()
         self.request_status = {}  # {request_id: status_info}
         self.processing_threads = []
-        
+
         logger.info("✅ TTS API服务初始化完成")
     
     def process_tts_request(self, request_data: Dict) -> Tuple[bool, Dict]:
@@ -305,25 +308,44 @@ class TTSAPIService:
         logger.info(f"🎵 生成模拟音频: {duration:.1f}秒, {len(buffer.getvalue())} 字节")
         return buffer.getvalue()
 
-    def _get_next_voice_number(self, user_id: str, voice_name: str) -> int:
+    def _is_voice_id_available(self, voice_id: str) -> bool:
         """
-        获取音色的下一个递增编号
+        检查 voice_id 是否可用（数据库中不存在）
 
         Args:
-            user_id: 用户ID
+            voice_id: 音色ID
+
+        Returns:
+            True: 可用，False: 已存在
+        """
+        try:
+            cursor = self.db_conn.cursor()
+            cursor.execute('SELECT COUNT(*) FROM voices WHERE voice_id = ?', (voice_id,))
+            count = cursor.fetchone()[0]
+            return count == 0
+        except Exception as e:
+            logger.warning(f"⚠️ 检查音色ID可用性失败: {e}")
+            return False
+
+    def _get_next_voice_number(self, user_id: str, voice_name: str) -> int:
+        """
+        获取音色的下一个递增编号（全局唯一，不区分用户）
+
+        Args:
+            user_id: 用户ID（保留参数，但不使用）
             voice_name: 音色名称
 
         Returns:
             下一个编号（从1开始）
         """
         try:
-            # 查询数据库中该用户该音色名称的最大编号
+            # 🎯 查询数据库中所有该音色名称的编号（不区分用户，确保全局唯一）
             cursor = self.db_conn.cursor()
             cursor.execute('''
                 SELECT voice_id FROM voices
-                WHERE owner_id = ? AND voice_name = ?
+                WHERE voice_name = ?
                 ORDER BY created_at DESC
-            ''', (user_id, voice_name))
+            ''', (voice_name,))
 
             existing_voices = cursor.fetchall()
 
@@ -371,9 +393,23 @@ class TTSAPIService:
                 return None
 
             # 🎯 生成友好的音色ID：音色名称_递增编号
+            # 从数据库查询起始编号
             voice_number = self._get_next_voice_number(user_id, voice_name)
             voice_id = f"{voice_name}_{voice_number}"
-            logger.info(f"🎯 生成音色ID: {voice_id}")
+
+            # 🎯 检查 voice_id 是否已存在，如果存在则递增编号（最多尝试100次）
+            max_attempts = 100
+            for attempt in range(max_attempts):
+                if self._is_voice_id_available(voice_id):
+                    logger.info(f"🎯 生成音色ID: {voice_id}")
+                    break
+                else:
+                    voice_number += 1
+                    voice_id = f"{voice_name}_{voice_number}"
+                    logger.info(f"⚠️ 音色ID已存在，尝试下一个: {voice_id}")
+            else:
+                logger.error(f"❌ 无法生成可用的音色ID（尝试了{max_attempts}次）")
+                return None
 
             # 方案1: 尝试调用 IndexTTS2 的 /create_voice API
             try:
