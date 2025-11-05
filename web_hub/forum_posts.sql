@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS forum_posts (
     -- 帖子内容信息
     title TEXT NOT NULL,                           -- 帖子标题
     content TEXT,                                  -- 帖子内容
-    author_id VARCHAR(50) NOT NULL,                -- 作者ID
+    author_id VARCHAR(50),                         -- 作者ID（可选）
     author_name VARCHAR(100) NOT NULL,             -- 作者用户名
     
     -- 封面信息 (智能剪口播专用)
@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS forum_posts (
     audio_urls TEXT,                               -- 音频URL列表 (JSON格式)
     original_filenames TEXT,                       -- 原始文件名列表 (JSON格式)
     media_count INTEGER DEFAULT 0,                 -- 媒体文件总数
+    has_video BOOLEAN DEFAULT FALSE,               -- 是否包含视频
+    has_audio BOOLEAN DEFAULT FALSE,               -- 是否包含音频
+    content_length INTEGER DEFAULT 0,              -- 内容长度（字符数）
     
     -- 处理状态
     processing_status VARCHAR(20) DEFAULT 'pending', -- pending, processing, completed, failed
@@ -49,13 +52,15 @@ CREATE TABLE IF NOT EXISTS forum_posts (
     reply_time DATETIME,                           -- 回复时间
     
     -- 时间戳
-    post_time DATETIME NOT NULL,                   -- 帖子发布时间
+    post_time DATETIME,                            -- 帖子发布时间（可选）
     discovered_time DATETIME DEFAULT CURRENT_TIMESTAMP, -- 发现时间
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, -- 记录创建时间
     last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,    -- 最后更新时间
-    
+
     -- 元数据
     metadata TEXT,                                 -- 额外元数据 (JSON格式)
     source_url TEXT,                               -- 原始帖子URL
+    tags TEXT,                                     -- 标签列表 (JSON格式)
     
     -- 索引字段
     is_processed BOOLEAN DEFAULT FALSE,            -- 是否已处理

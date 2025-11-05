@@ -31,12 +31,12 @@ except ImportError:
 
 @dataclass
 class ForumPostRecord:
-    """论坛帖子记录"""
+    """论坛帖子记录（与数据库表结构一致）"""
     post_id: str
     thread_id: str
     title: str
     author_name: str
-    post_url: str
+    source_url: str  # 统一使用 source_url（与数据库表和工作节点一致）
     discovered_time: datetime
     processing_status: str = "discovered"  # discovered, dispatched, completed, failed
     dispatch_time: Optional[datetime] = None
@@ -47,7 +47,6 @@ class ForumPostRecord:
     retry_count: int = 0
     has_video: bool = False
     has_audio: bool = False
-    media_count: int = 0
     content_length: int = 0
     tags: List[str] = None
     created_at: Optional[datetime] = None
@@ -80,11 +79,11 @@ class ForumPostRecord:
 
         # 过滤掉不存在的字段，避免意外的关键字参数错误
         valid_fields = {
-            'post_id', 'thread_id', 'title', 'author_name', 'post_url',
+            'post_id', 'thread_id', 'title', 'author_name', 'source_url',
             'discovered_time', 'processing_status', 'dispatch_time',
             'completion_time', 'task_id', 'machine_url', 'error_message',
-            'retry_count', 'has_video', 'has_audio', 'media_count',
-            'content_length', 'tags', 'created_at', 'last_updated'
+            'retry_count', 'has_video', 'has_audio', 'content_length',
+            'tags', 'created_at', 'last_updated'
         }
 
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
@@ -154,7 +153,7 @@ class SQLiteRedisDataManager:
 
                 self.logger.info("SQLite数据库初始化成功（使用统一脚本）")
             else:
-                # 降级方案：手动创建表（兼容旧版本）
+                # 降级方案：手动创建表（与forum_posts.sql保持一致）
                 self.logger.warning("未找到forum_posts.sql，使用内置表结构")
                 with sqlite3.connect(self.db_path) as conn:
                     conn.execute("""
@@ -163,7 +162,7 @@ class SQLiteRedisDataManager:
                         thread_id TEXT NOT NULL,
                         title TEXT NOT NULL,
                         author_name TEXT NOT NULL,
-                        post_url TEXT NOT NULL,
+                        source_url TEXT NOT NULL,
                         discovered_time TEXT NOT NULL,
                         processing_status TEXT DEFAULT 'discovered',
                         dispatch_time TEXT,
@@ -174,7 +173,6 @@ class SQLiteRedisDataManager:
                         retry_count INTEGER DEFAULT 0,
                         has_video BOOLEAN DEFAULT FALSE,
                         has_audio BOOLEAN DEFAULT FALSE,
-                        media_count INTEGER DEFAULT 0,
                         content_length INTEGER DEFAULT 0,
                         tags TEXT,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -195,6 +193,11 @@ class SQLiteRedisDataManager:
                     'completion_time': 'TEXT',
                     'error_message': 'TEXT',
                     'retry_count': 'INTEGER DEFAULT 0',
+                    'has_video': 'BOOLEAN DEFAULT FALSE',
+                    'has_audio': 'BOOLEAN DEFAULT FALSE',
+                    'content_length': 'INTEGER DEFAULT 0',
+                    'tags': 'TEXT',
+                    'created_at': 'TEXT DEFAULT CURRENT_TIMESTAMP',
                 }
 
                 # 添加缺失的字段（兼容旧数据库）
@@ -266,13 +269,13 @@ class SQLiteRedisDataManager:
             data['tags'] = json.dumps(data['tags'], ensure_ascii=False)
             data['last_updated'] = datetime.now().isoformat()
 
-            # 移除不存在的字段
+            # 移除不存在的字段（统一使用 source_url）
             valid_columns = [
-                'post_id', 'thread_id', 'title', 'author_name', 'post_url',
+                'post_id', 'thread_id', 'title', 'author_name', 'source_url',
                 'discovered_time', 'processing_status', 'dispatch_time',
                 'completion_time', 'task_id', 'machine_url', 'error_message',
-                'retry_count', 'has_video', 'has_audio', 'media_count',
-                'content_length', 'tags', 'last_updated'
+                'retry_count', 'has_video', 'has_audio', 'content_length',
+                'tags', 'created_at', 'last_updated'
             ]
 
             filtered_data = {k: v for k, v in data.items() if k in valid_columns}
@@ -419,7 +422,7 @@ class SQLiteRedisDataManager:
                 thread_id=post_id,  # 使用post_id作为thread_id
                 title=title,
                 author_name=author,
-                post_url=url,
+                source_url=url,  # 统一使用 source_url
                 discovered_time=datetime.now()
             )
 

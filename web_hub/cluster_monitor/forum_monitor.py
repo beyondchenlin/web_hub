@@ -670,7 +670,7 @@ class ForumMonitor:
 
                     task = {
                         'title': post.get('title', '未知标题'),
-                        'post_url': post.get('thread_url'),
+                        'source_url': post.get('thread_url'),  # 统一使用 source_url
                         'content': post.get('content', ''),
                         'core_text': post.get('core_text', ''),  # 🎯 核心文本用于热词提取
                         'author': post.get('author', ''),
@@ -683,7 +683,7 @@ class ForumMonitor:
                         'category': post.get('category', ''),  # 🎯 Discuz分类信息字段
                         'metadata': {
                             'post_id': post.get('thread_id'),
-                            'post_url': post.get('thread_url'),
+                            'source_url': post.get('thread_url'),  # 统一使用 source_url
                             'thread_id': post.get('thread_id'),
                             'author': post.get('author', ''),
                             'cover_title_up': cover_title_up,
@@ -763,7 +763,7 @@ class ForumMonitor:
         metadata = post_data.get('metadata', {})
         payload = {
             'thread_id': metadata.get('post_id') or metadata.get('thread_id'),
-            'thread_url': post_data.get('post_url') or formatted_task.get('url'),
+            'thread_url': post_data.get('source_url') or formatted_task.get('url'),  # 统一使用 source_url
             'video_urls': post_data.get('video_urls', []),
             'original_filenames': post_data.get('original_filenames', []),
             'author_id': metadata.get('author_id'),
@@ -778,7 +778,7 @@ class ForumMonitor:
         }
 
         if not payload['thread_url']:
-            payload['thread_url'] = formatted_task.get('url') or metadata.get('post_url')
+            payload['thread_url'] = formatted_task.get('url') or metadata.get('source_url')  # 统一使用 source_url
 
         if not payload['video_urls'] and formatted_task.get('metadata', {}).get('video_urls'):
             payload['video_urls'] = formatted_task['metadata']['video_urls']
@@ -802,14 +802,12 @@ class ForumMonitor:
         """格式化任务数据以匹配工作节点期望的格式"""
         formatted_task = {}
 
-        # 🎯 关键修复：工作节点期望 'url' 字段，而不是 'source_url'
+        # 🎯 关键修复：工作节点期望 'url' 字段
         # 处理URL字段 - 优先使用帖子URL让工作节点自己解析
-        if 'post_url' in task_data:
+        if 'source_url' in task_data:
             # 帖子URL - 让工作节点解析视频链接
-            formatted_task['url'] = task_data['post_url']
-            print(f"📝 发送帖子URL给工作节点: {task_data['post_url']}")
-        elif 'source_url' in task_data:
             formatted_task['url'] = task_data['source_url']
+            print(f"📝 发送帖子URL给工作节点: {task_data['source_url']}")
         elif 'video_urls' in task_data and task_data['video_urls']:
             # 如果有video_urls，使用第一个
             formatted_task['url'] = task_data['video_urls'][0]
@@ -880,8 +878,8 @@ class ForumMonitor:
                 print(f"⚠️ 无法从URL提取文件名: {e}")
 
         # 传递帖子URL用于解析
-        if 'post_url' in task_data:
-            metadata['post_url'] = task_data['post_url']
+        if 'source_url' in task_data:
+            metadata['source_url'] = task_data['source_url']
 
         # 🎯 关键修复：标识这是论坛任务，启用热词功能
         metadata['is_forum_task'] = True
@@ -972,7 +970,7 @@ class ForumMonitor:
         post_id = post_data.get('metadata', {}).get('post_id', '')
         title = post_data.get('title', '未知标题')
         author = post_data.get('metadata', {}).get('author', '未知作者')
-        url = post_data.get('post_url', '')  # 现在是帖子URL而不是视频URL
+        url = post_data.get('source_url', '')  # 统一使用 source_url
 
         # 使用数据管理器检查是否已处理
         if self.data_manager and self.data_manager.is_post_processed(post_id):
