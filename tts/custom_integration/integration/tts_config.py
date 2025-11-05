@@ -59,10 +59,10 @@ MAX_AUDIO_DURATION = 60            # 最大音频时长(秒)
 RECOMMENDED_MIN_DURATION = 10      # 推荐最小时长(秒)
 RECOMMENDED_MAX_DURATION = 25      # 推荐最大时长(秒)
 
-# 支持的音频格式
-ALLOWED_AUDIO_EXTENSIONS = {'.wav', '.mp3', '.flac', '.m4a', '.aac'}
+# 支持的音频格式（包括AMR等移动端格式）
+ALLOWED_AUDIO_EXTENSIONS = {'.wav', '.mp3', '.flac', '.m4a', '.aac', '.amr', '.ogg', '.opus', '.wma'}
 # 支持的视频格式（用于提取音频）
-ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm'}
+ALLOWED_VIDEO_EXTENSIONS = {'.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.3gp', '.m4v', '.mpg', '.mpeg'}
 
 # ==================== Session配置 ====================
 SECRET_KEY = os.getenv("SECRET_KEY", "indextts2-voice-clone-secret-key-change-in-production")

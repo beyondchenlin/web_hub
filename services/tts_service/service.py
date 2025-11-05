@@ -65,10 +65,12 @@ class TTSTaskService:
     # ------------------------------------------------------------------ #
     def _download_audio_file(self, audio_url: str, request_id: str) -> Optional[str]:
         """
-        从URL下载音频文件到本地
+        从URL下载音频/视频文件到本地
+
+        注意：视频文件的音频提取由 tts_api_service.py 的 _create_voice_fallback 方法处理
 
         Args:
-            audio_url: 音频文件URL
+            audio_url: 音频/视频文件URL
             request_id: 请求ID（用于生成文件名）
 
         Returns:
@@ -88,7 +90,7 @@ class TTSTaskService:
             local_path = uploads_dir / f"{request_id}{ext}"
 
             # 下载文件
-            print(f"🔽 开始下载音频文件: {audio_url}")
+            print(f"🔽 开始下载文件: {audio_url}")
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
@@ -103,12 +105,12 @@ class TTSTaskService:
                         f.write(chunk)
 
             file_size_mb = os.path.getsize(local_path) / (1024 * 1024)
-            print(f"✅ 音频文件下载完成: {local_path} ({file_size_mb:.2f} MB)")
+            print(f"✅ 文件下载完成: {local_path} ({file_size_mb:.2f} MB)")
 
             return str(local_path)
 
         except Exception as e:
-            print(f"❌ 音频文件下载失败: {e}")
+            print(f"❌ 文件下载失败: {e}")
             return None
 
     def _convert_forum_payload_to_tts_format(self, forum_payload: Dict[str, Any], request_type: str) -> Dict[str, Any]:
@@ -127,13 +129,21 @@ class TTSTaskService:
         # 生成唯一的request_id
         request_id = str(uuid.uuid4())
 
-        # 🎯 提取音频URL（支持两种格式）
+        # 🎯 提取音频URL（支持多种格式）
         # 格式1：audio_url (单个URL，新格式)
         # 格式2：audio_urls (URL数组，旧格式)
+        # 格式3：video_urls (视频文件也可以用于音色克隆，提取音频)
         audio_url = forum_payload.get('audio_url', '')
         if not audio_url:
             audio_urls = forum_payload.get('audio_urls', [])
             audio_url = audio_urls[0] if audio_urls else ''
+
+        # 🎯 如果没有音频URL，尝试从视频URL中提取（视频可以提取音频用于克隆）
+        if not audio_url:
+            video_urls = forum_payload.get('video_urls', [])
+            if video_urls:
+                audio_url = video_urls[0]
+                print(f"🎬 从视频URL中提取音频: {audio_url}")
 
         print(f"🔍 [DEBUG] 提取到的audio_url: {audio_url}")
 
@@ -145,9 +155,20 @@ class TTSTaskService:
                 print(f"⚠️ 音频文件下载失败，使用URL: {audio_url}")
                 audio_file = audio_url  # 回退到URL
 
-        # 提取标题作为音色名称或文本
+        # 🎯 提取文本内容（优先使用core_text，已过滤表单字段）
         title = forum_payload.get('title', '')
         content = forum_payload.get('content', '')
+        core_text = forum_payload.get('core_text', '')  # 优先使用过滤后的文本
+
+        # 🎯 从content中解析音色名称（如果有"选择音色:"字段）
+        voice_name = forum_payload.get('voice_name', '')
+        if not voice_name and content:
+            import re
+            # 查找"选择音色:"后面的内容
+            voice_match = re.search(r'选择音色\s*[:：]\s*([^\n]+)', content)
+            if voice_match:
+                voice_name = voice_match.group(1).strip()
+                print(f"🎤 从帖子内容中解析到音色: {voice_name}")
 
         if request_type == 'voice_clone':
             # 音色克隆请求
@@ -155,7 +176,7 @@ class TTSTaskService:
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
                 'voice_name': forum_payload.get('clone_voice_name', title or '未命名音色'),
-                'description': forum_payload.get('description', content),
+                'description': forum_payload.get('description', core_text or content),
                 'audio_file': audio_file,
                 'duration': 0,  # 需要实际计算音频时长
                 'is_public': forum_payload.get('clone_is_public', False),
@@ -165,11 +186,20 @@ class TTSTaskService:
             }
         else:
             # TTS合成请求
+            # 🎯 优先使用core_text（已过滤表单字段），回退到content或title
+            tts_text = core_text or content or title
+
+            # 🎯 处理"本人音色"的情况
+            if voice_name in ['本人音色', '']:
+                # 如果用户没有克隆过音色，使用默认音色
+                voice_name = '苏瑶'
+                print(f"💡 用户选择'本人音色'但未克隆，使用默认音色: {voice_name}")
+
             return {
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
-                'text': forum_payload.get('tts_text', content or title),
-                'voice_id': forum_payload.get('voice_name', '苏瑶'),  # 从解析结果中提取
+                'text': tts_text,
+                'voice_id': voice_name,  # 使用解析出的音色名称
                 'output_format': 'mp3',
                 'speed': forum_payload.get('speed', 1.0),
                 'emotion': forum_payload.get('emotion', ''),

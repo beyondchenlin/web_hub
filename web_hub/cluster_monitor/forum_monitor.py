@@ -952,7 +952,8 @@ class ForumMonitor:
 
         metadata['task_type'] = formatted_task['task_type']
         metadata['video_urls'] = task_data.get('video_urls', [])
- 
+        metadata['audio_urls'] = task_data.get('audio_urls', [])  # 🎯 传递音频链接
+
         formatted_task['metadata'] = metadata
 
         # 添加其他可能的字段

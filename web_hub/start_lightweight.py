@@ -272,7 +272,10 @@ def add_cluster_api(processor):
                 'core_text': forum_post_data.get('core_text', ''),
                 'thread_id': post_id,  # 帖子ID
                 'author_id': received_metadata.get('author_id', ''),
-                'author_name': received_metadata.get('author_name', '')
+                'author_name': received_metadata.get('author_name', ''),
+                # 🎯 关键修复：传递视频和音频URL（用于音色克隆）
+                'video_urls': received_metadata.get('video_urls', []),
+                'audio_urls': received_metadata.get('audio_urls', [])
             }
 
             print(f"🔍 [DEBUG] 创建的task_metadata封面标题:")

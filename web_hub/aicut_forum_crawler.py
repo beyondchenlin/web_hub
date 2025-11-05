@@ -493,6 +493,14 @@ class AicutForumCrawler:
             # 🎯 提取帖子分类信息（Discuz的caption字段）
             category = self._extract_category(soup)
 
+            # 🎯 关键修复：将音频附件的URL添加到audio_urls列表中
+            audio_attachments = [att for att in attachments if att.get('type') == 'audio']
+            for audio_att in audio_attachments:
+                audio_url = audio_att.get('url')
+                if audio_url and audio_url not in audio_urls:
+                    audio_urls.append(audio_url)
+                    print(f"🎵 从附件中提取音频URL: {audio_url}")
+
             return {
                 'content': content,                                    # 原始内容
                 'structured_content': structured_content,             # 结构化内容
@@ -688,12 +696,15 @@ class AicutForumCrawler:
         """从HTML内容中提取音频链接"""
         audio_urls = []
 
+        # 支持的音频格式（与tts_config.py保持一致）
+        audio_formats = 'mp3|wav|aac|flac|m4a|amr|ogg|opus|wma'
+
         # 音频URL模式 - 针对您网站的腾讯云COS存储
         patterns = [
-            # 腾讯云COS音频链接（增加amr格式支持）
-            r'https?://lrtcai-\d+\.cos\.ap-[^/]+\.myqcloud\.com/[^\s<>"\']*\.(?:mp3|wav|aac|flac|m4a|amr)',
-            # 通用音频链接（增加amr格式支持）
-            r'https?://[^\s<>"\']+\.(?:mp3|wav|aac|flac|m4a|amr)',
+            # 腾讯云COS音频链接（支持多种音频格式）
+            rf'https?://lrtcai-\d+\.cos\.ap-[^/]+\.myqcloud\.com/[^\s<>"\']*\.(?:{audio_formats})',
+            # 通用音频链接（支持多种音频格式）
+            rf'https?://[^\s<>"\']+\.(?:{audio_formats})',
         ]
 
         for pattern in patterns:
@@ -904,25 +915,35 @@ class AicutForumCrawler:
     def _extract_attachments(self, soup: BeautifulSoup) -> List[Dict[str, str]]:
         """提取附件信息"""
         attachments = []
-        
+
         # 查找附件链接
         attach_links = soup.find_all('a', href=re.compile(r'attachment\.php'))
-        
+
         for link in attach_links:
             attach_url = link.get('href')
             if not attach_url.startswith('http'):
                 attach_url = self.base_url + '/' + attach_url.lstrip('/')
-            
+
             attach_name = link.get_text(strip=True)
-            
-            # 检查是否为视频文件
-            if any(ext in attach_name.lower() for ext in ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm']):
+
+            # 检查是否为视频文件（支持多种视频格式）
+            video_exts = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm', '.3gp', '.m4v', '.mpg', '.mpeg']
+            audio_exts = ['.mp3', '.wav', '.aac', '.flac', '.m4a', '.amr', '.ogg', '.opus', '.wma']
+
+            if any(ext in attach_name.lower() for ext in video_exts):
                 attachments.append({
                     'name': attach_name,
                     'url': attach_url,
                     'type': 'video'
                 })
-        
+            # 🎯 检查是否为音频文件（支持音色克隆，支持多种音频格式）
+            elif any(ext in attach_name.lower() for ext in audio_exts):
+                attachments.append({
+                    'name': attach_name,
+                    'url': attach_url,
+                    'type': 'audio'
+                })
+
         return attachments
     
     def monitor_new_posts(self) -> List[Dict[str, Any]]:

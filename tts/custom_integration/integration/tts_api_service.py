@@ -478,13 +478,27 @@ class TTSAPIService:
             logger.info(f"   音频目标路径: {target_audio_path}")
             logger.info(f"   .pt目标路径: {target_pt_path}")
 
-            # 🎯 处理AMR格式：先转换为WAV
+            # 🎯 处理特殊格式：视频文件、非WAV音频格式等，先转换为WAV
             audio_file_to_process = audio_file
-            if audio_file.lower().endswith('.amr'):
-                logger.info(f"   检测到AMR格式，使用FFmpeg转换为WAV...")
+            file_ext = os.path.splitext(audio_file)[1].lower()
+
+            # 定义需要转换的格式
+            # 视频格式（需要提取音频）
+            video_extensions = {'.mp4', '.mov', '.mkv', '.avi', '.flv', '.wmv', '.webm', '.3gp', '.m4v', '.mpg', '.mpeg'}
+            # 音频格式（需要转换为WAV以确保兼容性）
+            audio_extensions_need_conversion = {'.amr', '.aac', '.m4a', '.ogg', '.opus', '.wma', '.mp3', '.flac'}
+
+            needs_conversion = file_ext in video_extensions or file_ext in audio_extensions_need_conversion
+
+            if needs_conversion:
+                if file_ext in video_extensions:
+                    logger.info(f"   检测到视频文件 ({file_ext})，使用FFmpeg提取音频...")
+                else:
+                    logger.info(f"   检测到音频格式 ({file_ext})，使用FFmpeg转换为WAV...")
+
                 try:
                     import subprocess
-                    temp_wav = audio_file.replace('.amr', '_converted.wav')
+                    temp_wav = audio_file.replace(file_ext, '_converted.wav')
 
                     # 🎯 使用项目内置的FFmpeg
                     # 路径：D:\clonetts\tts\indextts2\py312\ffmpeg\bin\ffmpeg.exe
@@ -508,9 +522,10 @@ class TTSAPIService:
                     else:
                         logger.info(f"   使用内置FFmpeg: {ffmpeg_path}")
 
-                    # 使用FFmpeg转换AMR到WAV
+                    # 使用FFmpeg转换/提取音频到WAV
                     cmd = [
                         ffmpeg_path, '-i', audio_file,
+                        '-vn',           # 不处理视频流（对视频文件重要）
                         '-ar', '22050',  # 采样率
                         '-ac', '1',      # 单声道
                         '-y',            # 覆盖输出文件
@@ -519,17 +534,17 @@ class TTSAPIService:
 
                     result = subprocess.run(cmd, capture_output=True, text=True)
                     if result.returncode == 0 and os.path.exists(temp_wav):
-                        logger.info(f"   ✓ AMR转换成功: {temp_wav}")
+                        logger.info(f"   ✓ 音频提取/转换成功: {temp_wav}")
                         audio_file_to_process = temp_wav
                     else:
-                        logger.error(f"   ❌ FFmpeg转换失败: {result.stderr}")
-                        raise Exception(f"AMR转换失败: {result.stderr}")
+                        logger.error(f"   ❌ FFmpeg处理失败: {result.stderr}")
+                        raise Exception(f"音频提取/转换失败: {result.stderr}")
 
                 except FileNotFoundError:
-                    logger.error(f"   ❌ 未找到FFmpeg，无法处理AMR格式")
-                    raise Exception("需要安装FFmpeg才能处理AMR格式音频")
+                    logger.error(f"   ❌ 未找到FFmpeg，无法处理该格式")
+                    raise Exception("需要安装FFmpeg才能处理视频/AMR格式")
                 except Exception as e:
-                    logger.error(f"   ❌ AMR转换异常: {e}")
+                    logger.error(f"   ❌ 音频提取/转换异常: {e}")
                     raise
 
             # 加载并标准化音频（22050 Hz）
