@@ -905,6 +905,11 @@ class ForumMonitor:
         metadata['is_forum_task'] = True
         metadata['forum_source'] = 'aicut_forum'
 
+        # 🎯 关键修复：传递category字段用于任务类型判断
+        if 'category' in task_data:
+            metadata['category'] = task_data['category']
+            print(f"📝 传递论坛分类: {task_data['category']}")
+
         # 🎯 关键修复：传递完整帖子数据给工作节点数据库
         forum_post_data = {}
         if 'content' in task_data:

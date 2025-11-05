@@ -291,12 +291,26 @@ def add_cluster_api(processor):
             from lightweight.queue_manager import TaskPriority
             from shared.task_model import TaskType
 
-            # 🎯 转换任务类型
+            # 🎯 智能检测任务类型（从category或内容中判断）
             task_type = TaskType.VIDEO  # 默认值
-            if task_type_str:
+
+            # 构建用于检测的帖子数据
+            post_for_detection = {
+                'category': category,
+                'content': forum_post_data.get('content', ''),
+                'title': task_metadata.get('title', '')
+            }
+
+            # 使用论坛集成模块的任务类型检测逻辑
+            if processor.forum_integration:
+                detected_type = processor.forum_integration._detect_task_type(post_for_detection)
+                task_type = detected_type
+                print(f"🎯 智能检测任务类型: {task_type.value}")
+            elif task_type_str:
+                # 回退：使用监控节点发送的类型
                 try:
                     task_type = TaskType(task_type_str)
-                    print(f"✅ 任务类型: {task_type.value}")
+                    print(f"✅ 使用监控节点指定的任务类型: {task_type.value}")
                 except ValueError:
                     print(f"⚠️ 未知的任务类型 '{task_type_str}'，使用默认值 VIDEO")
 
