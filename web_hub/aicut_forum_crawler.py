@@ -1277,9 +1277,16 @@ class AicutForumCrawler:
                             'Filedata': (os.path.basename(video_file), f, mime_type)
                         }
 
+                        # 🎯 根据MIME类型动态设置filetype
+                        if mime_type and mime_type.startswith('audio/'):
+                            filetype = 'audio'
+                        else:
+                            filetype = 'video'
+
                         data = {
-                            'filetype': 'video'
+                            'filetype': filetype
                         }
+                        print(f"📤 腾讯云上传参数: filetype={filetype}, mime={mime_type}")
 
                         response = self.session.post(
                             tencent_api_url,
