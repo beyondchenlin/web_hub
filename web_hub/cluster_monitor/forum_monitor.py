@@ -756,11 +756,31 @@ class ForumMonitor:
             machine.current_tasks = 0
             machine.last_error = str(e)[:100]  # 限制错误信息长度
     
-    # 🎯 监控节点不再需要判断任务类型
-    # 工作节点会根据category字段自己判断
+    def _detect_task_type_from_category(self, category: str) -> str:
+        """根据论坛分类判断任务类型"""
+        if not category:
+            return TaskType.VIDEO.value
+
+        category = category.strip()
+
+        # 音色克隆
+        if '音色克隆' in category:
+            return TaskType.VOICE_CLONE.value
+
+        # TTS
+        if '制作AI声音' in category or '制作ai声音' in category:
+            return TaskType.TTS.value
+
+        # 默认为视频
+        return TaskType.VIDEO.value
 
     def _build_queue_payload(self, post_data: Dict, formatted_task: Dict) -> Dict:
         metadata = post_data.get('metadata', {})
+
+        # 🎯 根据category判断任务类型
+        category = post_data.get('category', '') or metadata.get('category', '')
+        task_type = self._detect_task_type_from_category(category)
+
         payload = {
             'thread_id': metadata.get('post_id') or metadata.get('thread_id'),
             'thread_url': post_data.get('source_url') or formatted_task.get('url'),  # 统一使用 source_url
@@ -774,7 +794,7 @@ class ForumMonitor:
             'cover_info': post_data.get('cover_info') or metadata.get('cover_info'),
             'source': post_data.get('source', metadata.get('source', 'forum')),
             'payload': post_data.get('payload'),
-            'task_type': post_data.get('task_type', TaskType.VIDEO.value),
+            'task_type': task_type,  # 使用检测到的任务类型
         }
 
         if not payload['thread_url']:
