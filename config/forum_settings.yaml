@@ -1,7 +1,7 @@
-# 全局凭证配置（所有论坛的默认凭证）
-credentials:
-  username: AI剪辑助手
-  password: 594188@lrtcai
+# 全局凭证配置已移除，请使用环境变量配置
+# 使用以下环境变量设置凭证：
+# FORUM_USERNAME, FORUM_PASSWORD
+# 也兼容 AICUT_ADMIN_USERNAME, AICUT_ADMIN_PASSWORD
 
 # 多论坛配置（推荐使用此格式）
 forums:

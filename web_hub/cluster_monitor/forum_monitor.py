@@ -33,14 +33,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 # 导入配置
 from config import MonitorConfig
 
-# 导入模拟数据管理器
-try:
-    from mock_data_manager import get_mock_data_manager
-    MOCK_DATA_AVAILABLE = True
-    print("✅ 模拟数据管理器导入成功")
-except ImportError as e:
-    print(f"⚠️ 模拟数据管理器导入失败: {e}")
-    MOCK_DATA_AVAILABLE = False
+# 模拟数据管理器（默认禁用；仅当 ENABLE_MOCK_DATA=true 或 ENV=development 时启用）
+MOCK_DATA_AVAILABLE = False
+_ENABLE_MOCK = os.getenv("ENABLE_MOCK_DATA", "").lower() == "true" or os.getenv("ENV", "").lower() in ("dev", "development")
+if _ENABLE_MOCK:
+    try:
+        from test_utils.mock_data_manager import get_mock_data_manager
+        MOCK_DATA_AVAILABLE = True
+        print("✅ 模拟数据管理器导入成功")
+    except ImportError:
+        print("ℹ️ 模拟数据管理器不可用（开发功能），不影响生产")
+        MOCK_DATA_AVAILABLE = False
 
 # 🎯 导入完整版论坛爬虫
 try:

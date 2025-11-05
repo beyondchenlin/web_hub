@@ -6,8 +6,7 @@ echo   TTS工作节点启动
 echo ========================================
 echo.
 
-cd web_hub
-..\tts\indextts2\py312\python.exe start_lightweight.py --port 8005
+tts\indextts2\py312\python.exe web_hub\start_lightweight.py --port 8005
 
 pause
 

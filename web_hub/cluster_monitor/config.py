@@ -385,5 +385,4 @@ localhost:8004:2    # 本地工作节点2 - 中等优先级
 # 全局配置管理器实例
 config_manager = ConfigManager()
 
-# 默认配置实例
-default_config = MonitorConfig()
+# 默认配置实例（延迟实例化，避免导入时进行安全检查）

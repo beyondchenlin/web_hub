@@ -6,8 +6,7 @@ echo   TTS监控节点启动
 echo ========================================
 echo.
 
-cd web_hub\cluster_monitor
-..\..\tts\indextts2\py312\python.exe start_unified.py --mode production --port 8000
+tts\indextts2\py312\python.exe web_hub\cluster_monitor\start_unified.py --mode production --port 8000
 
 pause
 

@@ -35,15 +35,21 @@ web_hub/
 ### 1. 启动监控节点
 
 ```bash
-cd web_hub/cluster_monitor
-python start_unified.py --mode production --port 8000
+# 从仓库根目录启动（推荐）
+python web_hub/cluster_monitor/start_unified.py --mode production --port 8000
+
+# 或使用批处理脚本（Windows）
+1-启动监控节点.bat
 ```
 
 ### 2. 启动工作节点
 
 ```bash
-cd web_hub
-python start_lightweight.py --port 8005
+# 从仓库根目录启动（推荐）
+python web_hub/start_lightweight.py --port 8005
+
+# 或使用批处理脚本（Windows）
+2-启动工作节点.bat
 ```
 
 ### 3. 访问Web界面
@@ -81,18 +87,38 @@ localhost:8006:2
 ### 环境变量
 
 ```bash
-# 论坛配置文件（推荐优先修改）
+# 复制根目录示例为实际配置
+# cp .env.example .env
+
+# 在项目根目录 .env 中设置论坛账号（不要提交到仓库）
+FORUM_USERNAME=
+FORUM_PASSWORD=
+# 兼容变量（可选）
+# AICUT_ADMIN_USERNAME=
+# AICUT_ADMIN_PASSWORD=
+
+# 开发环境模拟数据（生产请保持 false）
+ENABLE_MOCK_DATA=false
+
+# 论坛地址请在 YAML 中配置：
 # config/forum_settings.yaml
 
-# 论坛配置
-FORUM_USERNAME=your_username
-FORUM_PASSWORD=your_password
-FORUM_BASE_URL=https://tts.lrtcai.com
-FORUM_TARGET_URL=https://tts.lrtcai.com/forum-2-1.html
-
-# Redis配置
+# Redis配置（可选）
 REDIS_HOST=localhost
 REDIS_PORT=6379
+```
+
+### 🔐 安全与配置最佳实践
+
+- 使用“项目根目录”的 .env 统一管理敏感信息（账号、密码等）
+- 切勿提交 .env 到代码仓库；参考 .env.example / web_hub/cluster_monitor/.env.template
+- Windows 请确认不要把 .env 保存成 .env.txt（显示文件扩展名以检查）
+- 我们已将启动脚本改为“从根目录启动”，因此 .env 应放在仓库根目录
+- 可用命令快速验证环境（不启动服务）：
+
+```bash
+python web_hub/cluster_monitor/start_unified.py --check-only
+```
 ```
 
 ## 📚 文档
@@ -184,5 +210,5 @@ web_hub/
 
 ---
 
-**最后更新**: 2025-11-02
+**最后更新**: 2025-11-05
 **版本**: v6.0 (Web Hub)
