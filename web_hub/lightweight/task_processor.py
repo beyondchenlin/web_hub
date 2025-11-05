@@ -197,8 +197,8 @@ class TaskProcessor:
             try:
                 loop_count += 1
 
-                # 每5次循环输出一次调试信息
-                if loop_count % 5 == 0:
+                # 🎯 降低日志频率：每6次循环输出一次调试信息（约30秒）
+                if loop_count % 6 == 0:
                     self._safe_print(f"🔽 下载工作器循环 #{loop_count}")
                     self.logger.info(f"下载工作器循环 #{loop_count}")
 
@@ -209,8 +209,8 @@ class TaskProcessor:
                     time.sleep(10)
                     continue
 
-                # 获取下载任务（静默尝试）
-                task = self.queue_manager.get_next_download_task(timeout=0.5)
+                # 🎯 获取下载任务（5秒超时）
+                task = self.queue_manager.get_next_download_task(timeout=5)
                 if not task:
                     # 增加无任务计数，不立即输出日志
                     self.download_no_task_count += 1
@@ -248,8 +248,8 @@ class TaskProcessor:
             try:
                 loop_count += 1
 
-                # 每5次循环输出一次调试信息
-                if loop_count % 5 == 0:
+                # 🎯 降低日志频率：每6次循环输出一次调试信息（约30秒）
+                if loop_count % 6 == 0:
                     self._safe_print(f"⚙️ 处理工作器循环 #{loop_count}")
                     self.logger.info(f"处理工作器循环 #{loop_count}")
 
@@ -260,8 +260,8 @@ class TaskProcessor:
                     time.sleep(10)
                     continue
 
-                # 获取处理任务（静默尝试）
-                task = self.queue_manager.get_next_process_task(timeout=0.5)  # 优化响应速度
+                # 🎯 获取处理任务（5秒超时）
+                task = self.queue_manager.get_next_process_task(timeout=5)
                 if not task:
                     # 增加无任务计数，不立即输出日志
                     self.process_no_task_count += 1
@@ -308,13 +308,13 @@ class TaskProcessor:
             try:
                 loop_count += 1
 
-                # 每5次循环输出一次调试信息
-                if loop_count % 5 == 0:
+                # 🎯 降低日志频率：每6次循环输出一次调试信息（约30秒）
+                if loop_count % 6 == 0:
                     self._safe_print(f"⬆️ 上传工作器循环 #{loop_count}")
                     self.logger.info(f"上传工作器循环 #{loop_count}")
 
-                # 获取上传任务（静默尝试）
-                task = self.queue_manager.get_next_upload_task(timeout=0.5)
+                # 🎯 获取上传任务（5秒超时）
+                task = self.queue_manager.get_next_upload_task(timeout=5)
                 if not task:
                     # 增加无任务计数，不立即输出日志
                     self.upload_no_task_count += 1
