@@ -149,7 +149,19 @@ class AicutForumCrawler:
             self._save_processed_posts()
     
     def login(self) -> bool:
-        """登录论坛"""
+        """登录论坛（幂等）：已登录或存在有效cookie时直接返回True，避免重复登录"""
+        # 1) 已登录直接返回
+        if getattr(self, "logged_in", False):
+            print("ℹ️ 已登录，跳过重复登录")
+            return True
+        # 2) 已有登录cookie则标记并返回
+        if hasattr(self, 'session') and self.session:
+            if any(cookie.name in ['cdb_sid', 'cdb_auth'] for cookie in self.session.cookies):
+                self.logged_in = True
+                print("ℹ️ 检测到登录cookie，跳过重复登录")
+                return True
+
+        # 3) 无账号信息则以游客模式
         if not self.username or not self.password:
             print("⚠️ 未提供登录信息，以游客模式运行")
             print(f"🔍 用户名: '{self.username}', 密码: {'已设置' if self.password else '未设置'}")

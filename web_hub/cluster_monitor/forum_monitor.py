@@ -141,31 +141,19 @@ class ForumMonitor:
 
                 # 🎯 使用 ForumCrawlerManager 获取爬虫实例
                 print("📋 使用 ForumCrawlerManager 获取论坛爬虫实例...")
-                manager = get_forum_crawler_manager()
-                self.forum_crawler = manager.get_crawler("main")
+                self.forum_crawler_manager = get_forum_crawler_manager()
+                self.forum_crawler = self.forum_crawler_manager.get_crawler("main")
+
+                # 🎯 使用Manager的_ensure_logged_in方法确保登录（避免重复登录）
+                print("🔐 确保论坛爬虫已登录...")
+                self.forum_crawler_manager._ensure_logged_in(self.forum_crawler)
 
                 if self.forum_crawler.logged_in:
                     print("✅ 论坛爬虫已就绪（已登录）")
                 else:
-                    print("⚠️ 论坛爬虫未登录，尝试自动登录...")
-                    # 🎯 关键修复：监控节点启动时主动登录
-                    if username and password:
-                        login_success = self.forum_crawler.login()
-                        if login_success:
-                            print("✅ 论坛登录成功")
-                        else:
-                            print("⚠️ 论坛登录失败，将以游客模式运行")
-                    else:
-                        print("⚠️ 未配置论坛账号，将以游客模式运行")
-                    print("✅ 论坛爬虫初始化成功")
+                    print("⚠️ 论坛登录失败，将以游客模式运行")
 
-                    # 简化版爬虫需要手动登录
-                    print("🔐 尝试登录论坛...")
-                    login_success = self.forum_crawler.login()
-                    if login_success:
-                        print("✅ 论坛登录成功")
-                    else:
-                        print("⚠️ 论坛登录失败，将以游客模式运行")
+                print("✅ 论坛爬虫初始化成功")
 
             except Exception as e:
                 print(f"⚠️ 论坛爬虫初始化失败: {e}")
