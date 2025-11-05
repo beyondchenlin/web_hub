@@ -857,6 +857,21 @@ class AicutForumCrawler:
         # 基础清理
         core_text = content
 
+        # 🎯 移除论坛表单字段（TTS任务）
+        # 移除"制作AI声音"标题
+        core_text = re.sub(r'制作AI声音\s*', '', core_text, flags=re.IGNORECASE)
+
+        # 移除"选择音色:"及其值（支持多种格式）
+        core_text = re.sub(r'选择音色\s*[:：]\s*[^\n]*', '', core_text)
+
+        # 移除"音色克隆"相关字段
+        core_text = re.sub(r'音色克隆\s*', '', core_text)
+        core_text = re.sub(r'音色名称\s*[:：]\s*[^\n]*', '', core_text)
+
+        # 移除其他常见表单字段
+        core_text = re.sub(r'语速\s*[:：]\s*[^\n]*', '', core_text)
+        core_text = re.sub(r'情感\s*[:：]\s*[^\n]*', '', core_text)
+
         # 移除系统标识
         core_text = re.sub(r'懒人智能剪辑\s*', '', core_text)
 
@@ -867,13 +882,15 @@ class AicutForumCrawler:
         core_text = re.sub(r'https?://[^\s]+', '', core_text)
         core_text = re.sub(r'\[url[^\]]*\].*?\[/url\]', '', core_text, flags=re.IGNORECASE)
 
-        # 清理空格
-        core_text = re.sub(r'\s+', ' ', core_text).strip()
+        # 清理多余的空白字符
+        core_text = re.sub(r'\n\s*\n', '\n', core_text)  # 移除多余空行
+        core_text = re.sub(r'\s+', ' ', core_text).strip()  # 合并空格
 
         return {
             'core_text': core_text,
             'system_tags': [],
             'cover_title_up': '',
+            'cover_title_middle': '',
             'cover_title_down': '',
             'urls': [],
             'bbcode_tags': [],
