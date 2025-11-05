@@ -197,32 +197,61 @@ class TTSAPIService:
                 self._update_request_status(request_id, RequestStatus.FAILED, error_msg)
                 return False, {'error': error_msg}
             
-            # 调用音色克隆API
-            voice_id = self._call_voice_clone_api(
-                audio_file=audio_file,
-                voice_name=voice_name,
-                user_id=user_id
-            )
-            
+            # 🎯 先预留数据库记录，再创建文件（避免文件垃圾）
+            # 如果遇到UNIQUE约束冲突，自动递增编号重试
+            max_attempts = 100
+            voice_id = None
+            base_voice_name = voice_name  # 保存原始音色名称
+
+            for attempt in range(1, max_attempts + 1):
+                # 生成 voice_id
+                voice_number = self._get_next_voice_number(user_id, base_voice_name)
+                temp_voice_id = f"{base_voice_name}_{voice_number + attempt - 1}"
+
+                # 🎯 步骤1：先在数据库中预留记录（状态=创建中）
+                success, conflict = self._reserve_voice_id(
+                    voice_id=temp_voice_id,
+                    voice_name=base_voice_name,
+                    user_id=user_id,
+                    description=description,
+                    duration=duration,
+                    is_public=is_public,
+                    audio_file=audio_file
+                )
+
+                if conflict:
+                    # UNIQUE约束冲突，递增编号重试
+                    logger.warning(f"⚠️ 音色ID冲突: {temp_voice_id}，尝试下一个编号 (尝试 {attempt}/{max_attempts})")
+                    continue
+                elif not success:
+                    # 其他错误
+                    error_msg = "数据库预留失败"
+                    logger.error(f"❌ {error_msg}")
+                    self._update_request_status(request_id, RequestStatus.FAILED, error_msg)
+                    return False, {'error': error_msg}
+
+                # 🎯 步骤2：数据库预留成功，创建音色文件
+                logger.info(f"✅ 数据库预留成功: {temp_voice_id}，开始创建音色文件...")
+                file_created = self._create_voice_file(
+                    audio_file=audio_file,
+                    voice_id=temp_voice_id,
+                    user_id=user_id
+                )
+
+                if file_created:
+                    voice_id = temp_voice_id
+                    logger.info(f"✅ 音色创建成功: {voice_id}")
+                    break
+                else:
+                    # 文件创建失败，删除数据库记录
+                    logger.error(f"❌ 音色文件创建失败，回滚数据库记录: {temp_voice_id}")
+                    self._delete_voice_record(temp_voice_id)
+                    error_msg = "音色文件创建失败"
+                    self._update_request_status(request_id, RequestStatus.FAILED, error_msg)
+                    return False, {'error': error_msg}
+
             if not voice_id:
-                error_msg = "音色克隆API调用失败"
-                logger.error(f"❌ {error_msg}")
-                self._update_request_status(request_id, RequestStatus.FAILED, error_msg)
-                return False, {'error': error_msg}
-            
-            # 保存音色信息到数据库
-            success = self._save_voice_clone_info(
-                voice_id=voice_id,
-                voice_name=voice_name,
-                user_id=user_id,
-                description=description,
-                duration=duration,
-                is_public=is_public,
-                audio_file=audio_file
-            )
-            
-            if not success:
-                error_msg = "音色信息保存失败"
+                error_msg = f"无法创建音色（尝试了{max_attempts}次，都遇到ID冲突）"
                 logger.error(f"❌ {error_msg}")
                 self._update_request_status(request_id, RequestStatus.FAILED, error_msg)
                 return False, {'error': error_msg}
@@ -308,25 +337,6 @@ class TTSAPIService:
         logger.info(f"🎵 生成模拟音频: {duration:.1f}秒, {len(buffer.getvalue())} 字节")
         return buffer.getvalue()
 
-    def _is_voice_id_available(self, voice_id: str) -> bool:
-        """
-        检查 voice_id 是否可用（数据库中不存在）
-
-        Args:
-            voice_id: 音色ID
-
-        Returns:
-            True: 可用，False: 已存在
-        """
-        try:
-            cursor = self.db_conn.cursor()
-            cursor.execute('SELECT COUNT(*) FROM voices WHERE voice_id = ?', (voice_id,))
-            count = cursor.fetchone()[0]
-            return count == 0
-        except Exception as e:
-            logger.warning(f"⚠️ 检查音色ID可用性失败: {e}")
-            return False
-
     def _get_next_voice_number(self, user_id: str, voice_name: str) -> int:
         """
         获取音色的下一个递增编号（全局唯一，不区分用户）
@@ -393,23 +403,10 @@ class TTSAPIService:
                 return None
 
             # 🎯 生成友好的音色ID：音色名称_递增编号
-            # 从数据库查询起始编号
+            # 从数据库查询起始编号（作为起点）
             voice_number = self._get_next_voice_number(user_id, voice_name)
             voice_id = f"{voice_name}_{voice_number}"
-
-            # 🎯 检查 voice_id 是否已存在，如果存在则递增编号（最多尝试100次）
-            max_attempts = 100
-            for attempt in range(max_attempts):
-                if self._is_voice_id_available(voice_id):
-                    logger.info(f"🎯 生成音色ID: {voice_id}")
-                    break
-                else:
-                    voice_number += 1
-                    voice_id = f"{voice_name}_{voice_number}"
-                    logger.info(f"⚠️ 音色ID已存在，尝试下一个: {voice_id}")
-            else:
-                logger.error(f"❌ 无法生成可用的音色ID（尝试了{max_attempts}次）")
-                return None
+            logger.info(f"🎯 生成音色ID: {voice_id}")
 
             # 方案1: 尝试调用 IndexTTS2 的 /create_voice API
             try:
@@ -657,10 +654,17 @@ class TTSAPIService:
             logger.error(f"❌ 保存音频文件异常: {str(e)}")
             return None
     
-    def _save_voice_clone_info(self, voice_id: str, voice_name: str, user_id: str,
-                               description: str, duration: float, is_public: bool,
-                               audio_file: str) -> bool:
-        """保存音色克隆信息"""
+    def _reserve_voice_id(self, voice_id: str, voice_name: str, user_id: str,
+                          description: str, duration: float, is_public: bool,
+                          audio_file: str) -> Tuple[bool, bool]:
+        """
+        在数据库中预留 voice_id（原子操作）
+
+        Returns:
+            (success, conflict):
+                - success: 是否预留成功
+                - conflict: 是否是UNIQUE约束冲突
+        """
         try:
             conn = sqlite3.connect(DATABASE_PATH)
             conn.row_factory = sqlite3.Row
@@ -679,12 +683,111 @@ class TTSAPIService:
             conn.close()
 
             logger.info(f"✅ 音色信息已保存: {voice_id}")
-            return True
+            return True, False  # 成功，无冲突
+
+        except sqlite3.IntegrityError as e:
+            # 🎯 UNIQUE约束冲突
+            if 'UNIQUE constraint failed' in str(e):
+                logger.debug(f"⚠️ 音色ID已存在: {voice_id}")
+                return False, True  # 失败，有冲突
+            else:
+                logger.error(f"❌ 数据库完整性错误: {str(e)}")
+                return False, False  # 失败，其他错误
 
         except Exception as e:
             logger.error(f"❌ 保存音色信息异常: {str(e)}")
-            return False
+            return False, False  # 失败，其他错误
     
+    def _create_voice_file(self, audio_file: str, voice_id: str, user_id: str) -> bool:
+        """
+        创建音色文件（调用API或本地方案）
+
+        Args:
+            audio_file: 音频文件路径
+            voice_id: 音色ID
+            user_id: 用户ID
+
+        Returns:
+            是否创建成功
+        """
+        try:
+            logger.info(f"📡 开始创建音色文件: {voice_id}")
+            logger.info(f"   音频文件: {audio_file}")
+
+            # 验证音频文件
+            if not os.path.exists(audio_file):
+                logger.error(f"❌ 音频文件不存在: {audio_file}")
+                return False
+
+            # 方案1: 尝试调用 IndexTTS2 的 /create_voice API
+            try:
+                create_voice_url = f"{self.api_url}/create_voice"
+                logger.info(f"📡 尝试调用API: {create_voice_url}")
+
+                with open(audio_file, 'rb') as f:
+                    files = {'audio': (os.path.basename(audio_file), f, 'audio/wav')}
+                    data = {'voice_name': voice_id}
+
+                    response = requests.post(
+                        create_voice_url,
+                        files=files,
+                        data=data,
+                        timeout=60
+                    )
+
+                if response.status_code == 200:
+                    logger.info(f"✅ API创建音色成功: {voice_id}")
+                    return True
+                elif response.status_code == 404:
+                    logger.warning(f"⚠️ API接口不存在，使用本地备用方案")
+                else:
+                    logger.warning(f"⚠️ API返回错误 ({response.status_code})，使用本地备用方案")
+
+            except requests.exceptions.ConnectionError:
+                logger.warning(f"⚠️ API连接失败，使用本地备用方案")
+            except requests.exceptions.Timeout:
+                logger.warning(f"⚠️ API请求超时，使用本地备用方案")
+            except Exception as e:
+                logger.warning(f"⚠️ API调用异常: {str(e)}，使用本地备用方案")
+
+            # 方案2: 本地备用方案
+            success = self._create_voice_fallback(audio_file, voice_id, user_id)
+
+            if success:
+                logger.info(f"✅ 本地方案创建音色成功: {voice_id}")
+                return True
+            else:
+                logger.error(f"❌ 本地方案创建音色失败")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ 创建音色文件异常: {type(e).__name__}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
+
+    def _delete_voice_record(self, voice_id: str) -> bool:
+        """
+        删除数据库中的音色记录（回滚用）
+
+        Args:
+            voice_id: 音色ID
+
+        Returns:
+            是否删除成功
+        """
+        try:
+            conn = sqlite3.connect(DATABASE_PATH)
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM voices WHERE voice_id = ?", (voice_id,))
+            conn.commit()
+            conn.close()
+            logger.info(f"✅ 已删除音色记录: {voice_id}")
+            return True
+        except Exception as e:
+            logger.error(f"❌ 删除音色记录失败: {str(e)}")
+            return False
+
     def _update_request_status(self, request_id: str, status: RequestStatus,
                                data: Any = None) -> None:
         """更新请求状态"""
