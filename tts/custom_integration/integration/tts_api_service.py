@@ -89,38 +89,52 @@ class TTSAPIService:
         request_id = request_data.get('request_id')
         user_id = request_data.get('user_id')
         text = request_data.get('text', '')
-        voice_name = request_data.get('voice_name', '')
+        voice_name = request_data.get('voice_name', '').strip()
+        voice_id_in = request_data.get('voice_id', '').strip()
         speed = request_data.get('speed', 1.0)
         emotion = request_data.get('emotion', '')
         emotion_weight = request_data.get('emotion_weight', 0.5)
-        
+
         try:
             # 更新状态为处理中
             self._update_request_status(request_id, RequestStatus.PROCESSING)
-            
+
             logger.info(f"🔄 处理TTS请求: {request_id}")
             logger.info(f"   用户: {user_id}, 文案: {text[:50]}...")
-            logger.info(f"   音色: {voice_name}, 语速: {speed}")
-            
-            # 验证权限
-            can_use, reason, voice_id = self.permission_manager.can_use_voice_by_name(
-                user_id, voice_name
-            )
-            
-            if not can_use:
-                logger.error(f"❌ 权限验证失败: {reason}")
+            logger.info(f"   音色: {voice_name or voice_id_in}, 语速: {speed}")
+
+            # 统一权限校验与speaker解析
+            resolved_voice_id = None
+            if voice_id_in:
+                can_use, reason = self.permission_manager.can_use_voice(user_id, voice_id_in)
+                if not can_use:
+                    logger.error(f"❌ 权限验证失败: {reason}")
+                    self._update_request_status(request_id, RequestStatus.FAILED, reason)
+                    return False, {'error': reason}
+                resolved_voice_id = voice_id_in
+            elif voice_name:
+                can_use, reason, resolved_voice_id = self.permission_manager.can_use_voice_by_name(
+                    user_id, voice_name
+                )
+                if not can_use or not resolved_voice_id:
+                    logger.error(f"❌ 权限验证失败: {reason}")
+                    self._update_request_status(request_id, RequestStatus.FAILED, reason)
+                    return False, {'error': reason}
+            else:
+                reason = "❌ 缺少音色参数"
+                logger.error(reason)
                 self._update_request_status(request_id, RequestStatus.FAILED, reason)
                 return False, {'error': reason}
-            
+
             # 调用TTS API
             audio_data = self._call_tts_api(
                 text=text,
-                speaker=voice_name,
+                speaker=resolved_voice_id,
                 speed=speed,
                 emotion=emotion,
                 emotion_weight=emotion_weight
             )
-            
+
             if not audio_data:
                 error_msg = "TTS API调用失败"
                 logger.error(f"❌ {error_msg}")

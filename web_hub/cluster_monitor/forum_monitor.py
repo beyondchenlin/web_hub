@@ -668,16 +668,10 @@ class ForumMonitor:
                     cover_title_up = cover_info.get('cover_title_up', '')
                     cover_title_down = cover_info.get('cover_title_down', '')
 
+                    # 🎯 监控节点：只传递URL和基本信息，让工作节点自己处理
                     task = {
                         'title': post.get('title', '未知标题'),
                         'source_url': post.get('thread_url'),  # 统一使用 source_url
-                        'content': post.get('content', ''),
-                        'core_text': post.get('core_text', ''),  # 🎯 核心文本用于热词提取
-                        'author': post.get('author', ''),
-                        'author_id': post.get('author_id', ''),  # 🎯 作者ID
-                        'cover_title_up': cover_title_up,
-                        'cover_title_down': cover_title_down,
-                        'cover_info_raw': post.get('content', ''),
                         'video_urls': post.get('video_urls', []),
                         'audio_urls': post.get('audio_urls', []),  # 🎯 音频链接
                         'original_filenames': post.get('original_filenames', []),
@@ -686,10 +680,6 @@ class ForumMonitor:
                             'post_id': post.get('thread_id'),
                             'source_url': post.get('thread_url'),  # 统一使用 source_url
                             'thread_id': post.get('thread_id'),
-                            'author': post.get('author', ''),
-                            'author_id': post.get('author_id', ''),  # 🎯 作者ID
-                            'cover_title_up': cover_title_up,
-                            'cover_title_down': cover_title_down,
                             'discovered_at': datetime.now().isoformat(),
                             'forum_name': post.get('forum_name', '智能剪口播'),
                             'source': 'forum',

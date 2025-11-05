@@ -87,11 +87,20 @@ class TTSForumReplyUploader:
                 user_id=user_id
             )
             
+            # 准备附件（确保文件存在且格式兼容）
+            logger.info(f"🔍 准备上传附件: {output_path}")
+            if os.path.exists(output_path):
+                logger.info(f"✅ 音频文件确认存在: {os.path.basename(output_path)} ({file_size_mb:.2f} MB)")
+                attachments_to_upload = [output_path]
+            else:
+                logger.error(f"❌ 音频文件不存在，无法上传附件")
+                attachments_to_upload = []
+
             # 上传到论坛
             success = self._upload_to_forum(
                 thread_id=thread_id,
                 content=reply_content,
-                attachments=[output_path]
+                attachments=attachments_to_upload
             )
             
             if success:

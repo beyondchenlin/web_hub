@@ -406,7 +406,7 @@ class TTSRequestParser:
                         'post_id': post_data.get('thread_id'),
                         'thread_id': post_data.get('thread_id'),
                         'title': title,
-                        'author_id': post_data.get('author'),
+                        'author_id': post_data.get('author_id'),
                         'author_name': post_data.get('author'),
                         'post_url': post_data.get('thread_url'),
                         'post_time': post_data.get('post_time'),

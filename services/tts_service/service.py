@@ -229,7 +229,7 @@ class TTSTaskService:
                 'request_id': request_id,
                 'user_id': forum_payload.get('author_id', ''),
                 'text': tts_text,
-                'voice_id': voice_name,  # 使用解析出的音色名称
+                'voice_name': voice_name,  # 使用解析出的音色名称
                 'output_format': 'mp3',
                 'speed': forum_payload.get('speed', 1.0),
                 'emotion': forum_payload.get('emotion', ''),
@@ -254,9 +254,9 @@ class TTSTaskService:
 
         # 🔧 解析音色名称（支持"本人音色"等别名）
         user_id = converted_payload.get('user_id')
-        voice_name = converted_payload.get('voice_id', '')  # 用户输入的音色名称
+        voice_name = converted_payload.get('voice_name', '')  # 用户输入的音色名称
 
-        if user_id and voice_name:
+        if voice_name:
             try:
                 from voice_mapper import VoiceMapper
                 mapper = VoiceMapper()

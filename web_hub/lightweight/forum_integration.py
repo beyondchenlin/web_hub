@@ -308,13 +308,19 @@ class ForumIntegration:
                 original_filenames = post.get('original_filenames', [])
                 print(f"📁 原始文件名数量: {len(original_filenames)}")
 
+                # 🔍 调试：追踪author_id传递
+                author_id = post.get('author_id', '')
+                author_name = post.get('author', '')
+                print(f"🔍 [单机模式] 从post提取author_id: '{author_id}'")
+                print(f"🔍 [单机模式] 从post提取author: '{author_name}'")
+
                 formatted_post = {
                     'post_id': post['thread_id'],
                     'thread_id': post['thread_id'],
                     'title': post.get('title', ''),
                     'content': post.get('content', ''),  # 🔥 关键修复：添加内容字段
-                    'author_id': post.get('author', ''),  # 修复：使用author而不是author_id
-                    'author_name': post.get('author', ''),  # 修复：使用author而不是author_name
+                    'author_id': author_id,
+                    'author_name': author_name,
                     'video_url': primary_video_url,
                     'post_url': post.get('thread_url', ''),
                     'post_time': post.get('post_time'),
@@ -515,13 +521,19 @@ class ForumIntegration:
             self.logger.info(f"创建{task_type.value}任务: {post_id}")
 
             # 准备任务payload（TTS特定数据）
+            author_id = post.get('author_id', '')
+            author_name = post.get('author_name', '')
+
+            # 🔍 调试：追踪author_id传递到任务payload
+            print(f"🔍 [任务创建] author_id: '{author_id}', author_name: '{author_name}'")
+
             payload = {
                 'thread_id': thread_id,
                 'post_id': post_id,
                 'title': post.get('title', ''),
                 'content': post.get('content', ''),
-                'author_id': post.get('author_id', ''),
-                'author_name': post.get('author_name', ''),
+                'author_id': author_id,
+                'author_name': author_name,
                 'audio_urls': post.get('audio_urls', []),
                 'video_urls': post.get('video_urls', []),
                 'post_url': post.get('post_url', ''),
@@ -612,9 +624,16 @@ class ForumIntegration:
                 print("❌ 爬取帖子内容失败")
                 return False
 
-            if not post_content.get('has_video'):
-                print("❌ 帖子无视频内容")
-                return False
+            # 🎯 与单机模式对齐：不强制要求视频，支持TTS/音色克隆任务（只有音频或纯文本）
+            has_video = post_content.get('has_video', False)
+            has_audio = post_content.get('has_audio', False)
+
+            if has_video:
+                print(f"✅ 检测到视频内容")
+            elif has_audio:
+                print(f"✅ 检测到音频内容（可能是音色克隆任务）")
+            else:
+                print(f"✅ 检测到文本内容（可能是TTS任务）")
 
             # 🎯 第2步：数据格式化（与单机模式的_get_new_posts_from_forum相同）
             print("🔧 按单机模式格式化帖子数据")
@@ -639,13 +658,20 @@ class ForumIntegration:
             print(f"📝 封面标题: {post_content.get('cover_info', {})}")
 
             # 🎯 关键：按照单机模式格式化数据结构（与_get_new_posts_from_forum中的逻辑相同）
+            author_id = post_content.get('author_id', '')
+            author_name = post_content.get('author', '')
+
+            # 🔍 调试：追踪author_id传递
+            print(f"🔍 [集群模式] 从post_content提取author_id: '{author_id}'")
+            print(f"🔍 [集群模式] 从post_content提取author: '{author_name}'")
+
             formatted_post = {
                 'post_id': post_id,
                 'thread_id': post_id,
                 'title': post_content.get('title', ''),
                 'content': post_content.get('content', ''),
-                'author_id': post_content.get('author', ''),
-                'author_name': post_content.get('author', ''),
+                'author_id': author_id,
+                'author_name': author_name,
                 'video_url': primary_video_url,
                 'post_url': url,
                 'post_time': post_content.get('post_time'),

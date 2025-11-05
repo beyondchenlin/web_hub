@@ -230,6 +230,10 @@ class VoiceMapper:
         """
         # 1. 检查是否是"本人音色"别名
         if voice_name in self.MY_VOICE_ALIASES:
+            # 若未提供用户ID，则直接回退到系统默认，避免错误地使用空用户的默认音色
+            if not user_id or not str(user_id).strip():
+                logger.warning("⚠️ 未提供用户ID，'本人音色'回退系统默认")
+                return "苏瑶", "未提供用户ID，'本人音色'回退到系统默认音色: 苏瑶"
             default_voice = self.get_user_default_voice(user_id)
             if default_voice:
                 logger.info(f"🔍 解析音色: {voice_name} → {default_voice} (用户默认音色)")
@@ -237,7 +241,7 @@ class VoiceMapper:
             else:
                 logger.warning(f"⚠️ 用户 {user_id} 没有默认音色，使用系统默认")
                 return "苏瑶", "用户没有克隆音色，使用系统默认音色: 苏瑶"
-        
+
         # 2. 检查是否是用户自己克隆的音色
         user_voice = self.get_user_voice_by_name(user_id, voice_name)
         if user_voice:

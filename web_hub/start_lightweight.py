@@ -249,103 +249,34 @@ def add_cluster_api(processor):
             print(f"   - cover_title_down: '{cover_title_down}'")
             print(f"   - forum_post_data: {forum_post_data}")
 
-            # 创建任务元数据 - 直接使用集群监控系统发送的信息
-            task_metadata = {
-                'source': 'forum',
-                'post_id': post_id,
-                'post_url': url,
-                'title': received_metadata.get('title', f"论坛帖子_{post_id}"),
-                'is_cluster_task': True,
-                'is_forum_task': True,
-                # 🎯 关键修复：直接使用接收到的封面标题信息
-                'cover_title_up': cover_title_up,
-                'cover_title_middle': cover_title_middle,
-                'cover_title_down': cover_title_down,
-                'original_filename': received_metadata.get('original_filename', ''),
-                'cover_info_raw': received_metadata.get('cover_info_raw', ''),
-                'forum_source': received_metadata.get('forum_source', 'aicut_forum'),
-                'forum_post_data': forum_post_data,
-                # 🎯 传递category字段，用于任务类型判断
-                'category': category,
-                # 🎯 关键修复：提取TTS服务需要的字段到顶层
-                'content': forum_post_data.get('content', ''),
-                'core_text': forum_post_data.get('core_text', ''),
-                'thread_id': post_id,  # 帖子ID
-                'author_id': received_metadata.get('author_id', ''),
-                'author_name': received_metadata.get('author_name', ''),
-                # 🎯 关键修复：传递视频和音频URL（用于音色克隆）
-                'video_urls': received_metadata.get('video_urls', []),
-                'audio_urls': received_metadata.get('audio_urls', [])
-            }
+            # 🎯 工作节点：完整处理论坛帖子（复制监控节点的逻辑）
+            print(f"🕷️ 工作节点：完整处理论坛帖子...")
 
-            print(f"🔍 [DEBUG] 创建的task_metadata封面标题:")
-            print(f"   - cover_title_up: '{task_metadata['cover_title_up']}'")
-            print(f"   - cover_title_middle: '{task_metadata['cover_title_middle']}'")
-            print(f"   - cover_title_down: '{task_metadata['cover_title_down']}'")
-            print(f"   - forum_post_data: {task_metadata['forum_post_data']}")
+            # 调用论坛集成模块处理
+            try:
+                # 使用工作节点已有的 forum_integration 实例
+                if not hasattr(processor, 'forum_integration') or processor.forum_integration is None:
+                    print("❌ 工作节点：论坛集成模块未初始化")
+                    return jsonify({"error": "论坛集成模块未初始化"}), 500
 
-            # 创建任务数据
-            task_data_for_queue = {
-                'task_id': f"forum_{post_id}",
-                'source_url': url,
-                'post_id': post_id,
-                'title': task_metadata['title'],
-                'type': 'forum_url',
-                'metadata': task_metadata
-            }
-            print(f"🚨 DEBUG: 创建的队列任务数据: {task_data_for_queue}")
+                # 使用单机模式的处理逻辑
+                success = processor.forum_integration.process_single_forum_url(url)
 
-            # 创建任务
-            print(f"🚨 DEBUG: 准备创建任务...")
-            from lightweight.queue_manager import TaskPriority
-            from shared.task_model import TaskType
+                if success:
+                    print("✅ 工作节点：论坛帖子处理完成")
+                    return jsonify({"success": True, "message": "论坛帖子处理完成"})
+                else:
+                    print("❌ 工作节点：论坛帖子处理失败")
+                    return jsonify({"error": "论坛帖子处理失败"}), 500
 
-            # 🎯 智能检测任务类型（从category或内容中判断）
-            task_type = TaskType.VIDEO  # 默认值
-
-            # 构建用于检测的帖子数据
-            post_for_detection = {
-                'category': category,
-                'content': forum_post_data.get('content', ''),
-                'title': task_metadata.get('title', '')
-            }
-
-            # 使用论坛集成模块的任务类型检测逻辑
-            if processor.forum_integration:
-                detected_type = processor.forum_integration._detect_task_type(post_for_detection)
-                task_type = detected_type
-                print(f"🎯 智能检测任务类型: {task_type.value}")
-            elif task_type_str:
-                # 回退：使用监控节点发送的类型
-                try:
-                    task_type = TaskType(task_type_str)
-                    print(f"✅ 使用监控节点指定的任务类型: {task_type.value}")
-                except ValueError:
-                    print(f"⚠️ 未知的任务类型 '{task_type_str}'，使用默认值 VIDEO")
-
-            task_id = processor.queue_manager.create_task(
-                source_url=url,
-                priority=TaskPriority.NORMAL,
-                metadata=task_metadata,
-                payload=task_payload,  # 🎯 传递payload（包含audio_url等）
-                task_type=task_type  # 🎯 添加任务类型
-            )
-            print(f"🚨 DEBUG: 创建任务结果: {task_id}")
-
-            if not task_id:
-                print("❌ 创建任务失败")
-                return jsonify({"error": "创建任务失败"}), 500
-
-            print("🚨 DEBUG: 准备返回成功响应")
-            return jsonify({
-                "status": "success",
-                "post_id": post_id,
-                "message": "论坛URL已添加到处理队列"
-            }), 200
+            except Exception as e:
+                print(f"❌ 工作节点：论坛帖子处理异常: {e}")
+                import traceback
+                traceback.print_exc()
+                return jsonify({"error": f"论坛帖子处理异常: {str(e)}"}), 500
 
         except Exception as e:
             print(f"❌ 集群任务处理失败: {e}")
-            print(f"🚨 DEBUG: 异常类型: {type(e)}")
             import traceback
             traceback.print_exc()
             return jsonify({"error": f"处理失败: {str(e)}"}), 500

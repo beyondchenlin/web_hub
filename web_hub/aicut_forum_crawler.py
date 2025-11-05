@@ -1258,8 +1258,23 @@ class AicutForumCrawler:
 
                 try:
                     with open(video_file, 'rb') as f:
+                        # 根据文件扩展名设置正确的 MIME 类型
+                        import mimetypes
+                        mime_type, _ = mimetypes.guess_type(video_file)
+                        if not mime_type:
+                            if video_file.lower().endswith('.wav'):
+                                mime_type = 'audio/wav'
+                            elif video_file.lower().endswith('.mp3'):
+                                mime_type = 'audio/mpeg'
+                            elif video_file.lower().endswith('.m4a'):
+                                mime_type = 'audio/mp4'
+                            else:
+                                mime_type = 'video/mp4'  # 默认
+
+                        print(f"🧾 腾讯云上传MIME: {mime_type} -> {os.path.basename(video_file)}")
+
                         files = {
-                            'Filedata': (os.path.basename(video_file), f, 'video/mp4')
+                            'Filedata': (os.path.basename(video_file), f, mime_type)
                         }
 
                         data = {
