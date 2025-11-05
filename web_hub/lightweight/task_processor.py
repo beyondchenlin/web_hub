@@ -2,12 +2,11 @@
 # -*- encoding: utf-8 -*-
 
 """
-轻量级视频处理系统 - 任务处理器
+轻量级TTS/配音处理器 - 任务处理器
 
 主要功能：
-- 视频下载处理
-- 视频处理流水线集成
-- 视频上传处理
+- 论坛帖子解析（文本/音频）
+- TTS/配音任务路由与处理
 - 任务状态管理
 """
 
@@ -37,15 +36,15 @@ from .task_router import TaskRouter
 
 class TaskProcessor:
     """任务处理器"""
-    
-    def __init__(self, config, queue_manager: QueueManager, 
+
+    def __init__(self, config, queue_manager: QueueManager,
                  resource_monitor: LightweightResourceMonitor):
         self.config = config
         self.queue_manager = queue_manager
         self.resource_monitor = resource_monitor
         self.logger = get_logger("TaskProcessor")
         self.task_router = TaskRouter(config)
-        
+
         # 线程池
         self.download_executor = ThreadPoolExecutor(
             max_workers=config.max_download_workers,
@@ -59,13 +58,15 @@ class TaskProcessor:
             max_workers=config.max_upload_workers,
             thread_name_prefix="upload"
         )
-        
+
         # 运行状态
         self.running = False
         self.worker_threads = []
-        
-        # 导入原有pipeline模块
-        self._import_pipeline_modules()
+
+        # TTS/配音专用模式：彻底不加载视频流水线
+        self.video_pipeline_enabled = False
+        self.pipeline_modules = None
+        self.logger.info("TTS/配音专用模式")
 
         # 任务心跳跟踪
         self.task_heartbeats = {}
@@ -85,43 +86,8 @@ class TaskProcessor:
         """线程安全的print函数"""
         with self.print_lock:
             print(message, flush=True)
-    
-    def _import_pipeline_modules(self):
-        """导入原有pipeline模块"""
-        try:
-            from pre.main.pipeline import init_pipeline, run_step
-            from pre.stage.stage0 import step0_clean_json
-            from pre.stage.stage1 import step1_transcode
-            from pre.stage.stage2 import step2_remove_silence
-            from pre.stage.stage3 import step3_fix_video
-            from pre.stage.stage4 import step4_recognize
-            from pre.stage.stage5 import step5_ai_processing
-            from pre.stage.stage6 import step6_clip
-            from pre.stage.stage7 import step7_add_subtitle
-            from pre.stage.stage8 import step8_add_title
-            from pre.stage.stage9 import step9_organize_files
-            
-            self.pipeline_modules = {
-                'init_pipeline': init_pipeline,
-                'run_step': run_step,
-                'steps': {
-                    0: step0_clean_json,
-                    1: step1_transcode,
-                    2: step2_remove_silence,
-                    3: step3_fix_video,
-                    4: step4_recognize,
-                    5: step5_ai_processing,
-                    6: step6_clip,
-                    7: step7_add_subtitle,
-                    8: step8_add_title,
-                    9: step9_organize_files
-                }
-            }
-            self.logger.info("Pipeline模块导入成功")
-        except ImportError as e:
-            self.logger.error(f"Pipeline模块导入失败: {e}")
-            self.pipeline_modules = None
-    
+
+
     def start(self):
         """启动任务处理器"""
         if self.running:
@@ -144,20 +110,20 @@ class TaskProcessor:
 
         self.logger.info("任务处理器已启动")
         self._safe_print("✅ TaskProcessor 启动完成！")
-    
+
     def stop(self):
         """停止任务处理器"""
         self.running = False
-        
+
         # 关闭线程池
         self.download_executor.shutdown(wait=True)
         self.process_executor.shutdown(wait=True)
         self.upload_executor.shutdown(wait=True)
-        
+
         # 等待工作线程结束
         for thread in self.worker_threads:
             thread.join(timeout=5)
-        
+
         self.logger.info("任务处理器已停止")
 
     def _log_status_summary(self):
@@ -218,6 +184,12 @@ class TaskProcessor:
                     self._log_status_summary()
                     continue
 
+                # 下载前：仅处理TTS/配音任务，其他任务直接标记失败并跳过
+                if task.task_type not in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                    msg = "当前节点仅处理TTS/配音任务（已跳过非TTS任务）"
+                    self.logger.warning(f"{msg}, task_id={task.task_id}")
+                    self.queue_manager.fail_task(task.task_id, msg, retry=False)
+                    continue
                 # 获取到任务时输出信息，包括等待次数
                 wait_info = f" (等待了{self.download_no_task_count}次)" if self.download_no_task_count > 0 else ""
                 print(f"✅ 获取到下载任务: {task.task_id}{wait_info}")
@@ -237,7 +209,7 @@ class TaskProcessor:
                 import traceback
                 self.logger.error(traceback.format_exc())
                 time.sleep(5)
-    
+
     def _process_worker(self):
         """处理工作器"""
         self._safe_print("⚙️ 处理工作器已启动")
@@ -275,6 +247,13 @@ class TaskProcessor:
                     self._process_tts_task(task)
                     continue
 
+                # 非TTS任务：仅TTS/配音模式下直接失败
+                if task.task_type not in {TaskType.TTS, TaskType.VOICE_CLONE}:
+                    self.process_no_task_count = 0
+                    msg = "当前节点仅处理TTS/配音任务（已跳过非TTS任务）"
+                    self.logger.warning(f"{msg}, task_id={task.task_id}")
+                    self.queue_manager.fail_task(task.task_id, msg, retry=False)
+                    continue
                 wait_info = (
                     f" (等待了{self.process_no_task_count}次)"
                     if self.process_no_task_count > 0
@@ -297,7 +276,7 @@ class TaskProcessor:
                 import traceback
                 self.logger.error(traceback.format_exc())
                 time.sleep(5)
-    
+
     def _upload_worker(self):
         """上传工作器"""
         self._safe_print("⬆️ 上传工作器已启动")
@@ -341,7 +320,7 @@ class TaskProcessor:
                 import traceback
                 self.logger.error(traceback.format_exc())
                 time.sleep(5)
-    
+
     def _process_download(self, task: VideoTask):
         """处理下载任务"""
         try:
@@ -381,49 +360,25 @@ class TaskProcessor:
                 task.source_url = media_url
                 print(f"✅ 成功解析媒体URL: {media_url}")
 
-            if not task.source_url:
-                raise ValueError("缺少源URL")
+            # TTS/配音专用：不执行任何媒体下载，直接进入处理队列
+            # 允许三种输入来源：
+            #  - 帖子核心文本（core_text）
+            #  - 音频URL（audio_urls 或 source_url 指向音频）
+            #  - 其它TTS路由器可识别的metadata
+            has_tts_input = False
+            if task.metadata:
+                core_text = task.metadata.get('core_text')
+                audio_urls = task.metadata.get('audio_urls') or []
+                has_tts_input = bool((core_text and core_text.strip()) or audio_urls)
 
-            # 首先尝试从任务metadata获取原始文件名
-            original_filename = None
-            if task.metadata and task.metadata.get('original_filename'):
-                original_filename = task.metadata.get('original_filename')
-                print(f"📝 从任务metadata获取原始文件名: {original_filename}")
-                self.logger.info(f"从任务metadata获取原始文件名: {original_filename}")
+            if not (task.source_url or has_tts_input):
+                raise ValueError("缺少可处理的内容（既无可用URL，也无文本/音频信息）")
 
-            # 如果metadata中没有，尝试从数据库获取
-            if not original_filename:
-                original_filename = self._get_original_filename_from_db(task.task_id, task.source_url)
-
-            # 如果数据库中也没有，从URL中提取
-            if not original_filename:
-                original_filename = self._extract_filename_from_url(task.source_url)
-
-            # 创建本地文件路径 - 使用原始文件名
-            if original_filename:
-                filename = original_filename
-                print(f"📝 使用原始文件名: {filename}")
-            else:
-                # 如果无法提取原始文件名，使用UUID作为备用
-                filename = f"{task.task_id}.mp4"
-                print(f"📝 使用备用文件名: {filename}")
-
-            local_path = os.path.join(self.config.input_dir, filename)
-
-            # 实现真实的下载逻辑
-            self._download_video(task.source_url, local_path, task.task_id)
-
-            # 保存原始文件名到任务metadata
-            if not task.metadata:
-                task.metadata = {}
-            task.metadata['original_filename'] = filename
-
-            # 更新任务metadata到队列管理器
-            self.queue_manager.update_task_metadata(task.task_id, task.metadata)
-
-            # 完成下载
-            self.queue_manager.complete_download(task.task_id, local_path)
-            self.logger.info(f"下载完成: {task.task_id}, 原始文件名: {filename}")
+            # 直接标记为已“下载”，加入处理队列
+            task.status = TaskStatus.DOWNLOADED
+            self.queue_manager.add_to_process_queue(task)
+            self.logger.info(f"已跳过下载，进入处理队列: {task.task_id}")
+            return
 
         except Exception as e:
             error_msg = f"下载失败: {str(e)}"
@@ -464,545 +419,33 @@ class TaskProcessor:
             error_message = f"TTS任务执行异常: {exc}"
             self.logger.error(error_message)
             self.queue_manager.fail_task(task.task_id, error_message, retry=False)
-    
+
     def _download_video(self, url: str, local_path: str, task_id: str):
-        """真实的视频下载逻辑"""
-        download_start_time = time.time()
-        try:
-            self.logger.info(f"开始下载视频: {url}")
-            print(f"🔽 开始下载视频: {url}")
-
-            # 确保目录存在
-            Path(local_path).parent.mkdir(parents=True, exist_ok=True)
-
-            # 使用requests下载
-            import requests
-
-            # 设置请求头，模拟浏览器
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-            }
-
-            # 发送HEAD请求获取文件信息
-            try:
-                head_response = requests.head(url, headers=headers, timeout=30, allow_redirects=True)
-                total_size = int(head_response.headers.get('content-length', 0))
-                print(f"📊 文件大小: {total_size / (1024*1024):.2f} MB" if total_size > 0 else "📊 文件大小: 未知")
-            except:
-                total_size = 0
-
-            # 下载文件
-            response = requests.get(url, headers=headers, stream=True, timeout=60)
-            response.raise_for_status()
-
-            downloaded_size = 0
-            last_progress_mb = 0
-            with open(local_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded_size += len(chunk)
-
-                        # 每下载0.5MB更新一次进度（减少更新频率，提高兼容性）
-                        current_mb = downloaded_size / (1024 * 1024)
-                        if current_mb - last_progress_mb >= 0.5 or downloaded_size < 1024 * 1024:
-                            if total_size > 0:
-                                progress = (downloaded_size / total_size) * 100
-                                total_mb = total_size / (1024 * 1024)
-                                # 创建固定长度的进度条字符串，避免Windows终端显示问题
-                                progress_text = f"📥 下载进度: {progress:5.1f}% ({current_mb:6.2f}/{total_mb:6.2f} MB)"
-                                # 清空当前行并重新打印
-                                print(f"\r{progress_text:<60}", end='', flush=True)
-                            else:
-                                progress_text = f"📥 已下载: {current_mb:6.2f} MB"
-                                print(f"\r{progress_text:<60}", end='', flush=True)
-                            last_progress_mb = current_mb
-
-            # 验证下载的文件
-            if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
-                file_size = os.path.getsize(local_path)
-                download_duration = time.time() - download_start_time
-                # 换行结束进度条显示
-                print()
-                print(f"✅ 视频下载完成: {local_path}")
-                print(f"📁 文件大小: {file_size / (1024*1024):.2f} MB")
-                print(f"⏱️ 下载耗时: {download_duration:.1f}秒")
-                self.logger.info(f"视频下载完成: {local_path}, 大小: {file_size} bytes, 耗时: {download_duration:.1f}秒")
-
-                # 记录下载时间到性能追踪器
-                performance_tracker.record_download_time(task_id, download_duration)
-
-                return True
-            else:
-                raise ValueError("下载的文件为空或不存在")
-
-        except Exception as e:
-            error_msg = f"视频下载失败: {str(e)}"
-            print(f"❌ {error_msg}")
-            self.logger.error(error_msg)
-
-            # 清理失败的下载文件
-            if os.path.exists(local_path):
-                try:
-                    os.remove(local_path)
-                except:
-                    pass
-
-            raise Exception(error_msg)
-
-    def _get_original_filename_from_db(self, task_id: str, source_url: str) -> Optional[str]:
-        """从数据库获取原始文件名"""
-        try:
-            # 导入数据管理器
-            from forum_data_manager import get_data_manager
-
-            data_manager = get_data_manager()
-
-            # 通过task_id查找对应的帖子
-            posts = data_manager.get_posts_by_status("processing", limit=100)
-            posts.extend(data_manager.get_posts_by_status("pending", limit=100))
-
-            for post in posts:
-                if post.task_id == task_id and post.video_urls:
-                    # 找到匹配的URL索引
-                    for i, video_url in enumerate(post.video_urls):
-                        if video_url == source_url and post.original_filenames and i < len(post.original_filenames):
-                            filename = post.original_filenames[i]
-                            print(f"📝 从数据库获取原始文件名: {filename}")
-                            self.logger.info(f"从数据库获取原始文件名: {source_url} -> {filename}")
-                            return filename
-
-            return None
-
-        except Exception as e:
-            print(f"⚠️ 从数据库获取文件名失败: {e}")
-            self.logger.warning(f"从数据库获取文件名失败: {e}")
-            return None
-
-    def _extract_filename_from_url(self, url: str) -> Optional[str]:
-        """从URL中提取原始文件名，保持中文字符"""
-        try:
-            import urllib.parse
-            import re
-
-            # 解析URL
-            parsed_url = urllib.parse.urlparse(url)
-
-            # 从路径中提取文件名
-            path = parsed_url.path
-            if not path:
-                return None
-
-            # 获取路径的最后一部分（文件名）
-            filename = os.path.basename(path)
-
-            if not filename:
-                return None
-
-            # URL解码，处理中文字符
-            filename = urllib.parse.unquote(filename, encoding='utf-8')
-
-            # 验证文件名是否为视频文件
-            video_extensions = ['.mp4', '.avi', '.mov', '.mkv', '.flv', '.wmv', '.webm']
-            if not any(filename.lower().endswith(ext) for ext in video_extensions):
-                # 如果没有视频扩展名，添加.mp4
-                if '.' not in filename:
-                    filename += '.mp4'
-                else:
-                    # 替换扩展名为.mp4
-                    name_without_ext = os.path.splitext(filename)[0]
-                    filename = name_without_ext + '.mp4'
-
-            # 清理文件名中的非法字符（保留中文）
-            # 移除Windows文件名中不允许的字符，但保留中文
-            illegal_chars = r'[<>:"/\\|?*]'
-            filename = re.sub(illegal_chars, '_', filename)
-
-            # 限制文件名长度
-            if len(filename) > 200:
-                name_part, ext_part = os.path.splitext(filename)
-                max_name_length = 200 - len(ext_part)
-                filename = name_part[:max_name_length] + ext_part
-
-            print(f"📝 提取的原始文件名: {filename}")
-            self.logger.info(f"从URL提取文件名: {url} -> {filename}")
-
-            return filename
-
-        except Exception as e:
-            print(f"⚠️ 无法从URL提取文件名: {e}")
-            self.logger.warning(f"无法从URL提取文件名: {url}, 错误: {e}")
-            return None
+        """视频/媒体下载逻辑已移除（TTS/配音专用）"""
+        raise NotImplementedError("下载逻辑已移除：当前系统为TTS/配音专用模式")
 
 
     def _process_video(self, task: VideoTask):
         """处理视频任务 - 使用内部pipeline模块"""
-        try:
-            print(f"🎬 开始处理视频: {task.task_id}")
-            print(f"📁 源文件: {task.source_path}")
-            self.logger.info(f"开始处理视频: {task.task_id}")
+        raise NotImplementedError("视频流水线已移除：当前系统为TTS/配音专用模式")
 
-            if not task.source_path or not os.path.exists(task.source_path):
-                error_msg = f"源文件不存在: {task.source_path}"
-                print(f"❌ {error_msg}")
-                raise ValueError(error_msg)
 
-            print(f"✅ 源文件存在，开始处理...")
-
-            # 获取视频信息并开始性能追踪
-            file_size_mb = os.path.getsize(task.source_path) / (1024 * 1024)
-
-            # 获取原始文件名
-            original_filename = "unknown.mp4"
-            if task.metadata and task.metadata.get('original_filename'):
-                original_filename = task.metadata.get('original_filename')
-
-            # 获取视频时长（使用ffprobe）
-            video_duration = self._get_video_duration(task.source_path)
-            if video_duration <= 0:
-                video_duration = 180.0  # 如果获取失败，默认3分钟
-                print(f"⚠️ 无法获取视频时长，使用默认值: {video_duration}秒")
-
-            # 开始性能追踪
-            perf_task_id = performance_tracker.start_video_processing(
-                video_filename=task.task_id,
-                original_filename=original_filename,
-                file_size_mb=file_size_mb,
-                video_duration_seconds=video_duration
-            )
-
-            # 创建输出目录 - 使用绝对路径
-            output_dir = os.path.abspath(os.path.join(self.config.output_dir, task.task_id))
-            os.makedirs(output_dir, exist_ok=True)
-            print(f"📂 创建输出目录: {output_dir}")
-
-            # 保存论坛帖子信息到输出目录（如果有的话）
-            print(f"🔍 [DEBUG] 准备保存论坛信息...")
-            print(f"🔍 [DEBUG] 任务ID: {task.task_id}")
-            print(f"🔍 [DEBUG] 输出目录: {output_dir}")
-            print(f"🔍 [DEBUG] 任务metadata存在: {task.metadata is not None}")
-            if task.metadata:
-                print(f"🔍 [DEBUG] metadata字段:")
-                for key, value in task.metadata.items():
-                    print(f"     - {key}: {value}")
-            self._save_forum_info_to_output(task, output_dir)
-
-            # 获取pipeline配置，包含GPU设置
-            from lightweight.config import get_config_manager
-            config_manager = get_config_manager()
-            pipeline_config = config_manager.get_pipeline_config()
-            pipeline_config['output_dir'] = output_dir
-
-            print(f"🔧 GPU加速状态: {'启用' if pipeline_config.get('use_gpu', False) else '禁用'}")
-            self.logger.info(f"GPU加速状态: {'启用' if pipeline_config.get('use_gpu', False) else '禁用'}")
-
-            # 使用内部pipeline模块处理
-            print(f"⚙️ 开始执行pipeline...")
-            success, output_file = self._run_pipeline_internal(task.source_path, pipeline_config, task.task_id)
-
-            if not success:
-                error_msg = "视频处理失败"
-                print(f"❌ {error_msg}")
-                raise RuntimeError(error_msg)
-
-            print(f"✅ Pipeline执行成功，输出文件: {output_file}")
-
-            # 完成处理
-            self.queue_manager.complete_process(task.task_id, output_file)
-            print(f"🎉 视频处理完成: {task.task_id}")
-            self.logger.info(f"视频处理完成: {task.task_id}")
-
-        except Exception as e:
-            error_msg = f"视频处理失败: {str(e)}"
-            print(f"❌ 任务 {task.task_id} {error_msg}")
-            self.logger.error(f"任务 {task.task_id} {error_msg}")
-            self.queue_manager.fail_task(task.task_id, error_msg)
 
     def _run_pipeline_internal(self, input_video: str, config: Dict[str, Any], task_id: str) -> tuple:
         """使用内部pipeline模块运行处理流水线"""
-        try:
-            print(f"🔧 开始内部pipeline处理: {task_id}")
-            self.logger.info(f"开始内部pipeline处理: {task_id}")
-
-            # 初始化pipeline
-            init_pipeline = self.pipeline_modules['init_pipeline']
-            run_step = self.pipeline_modules['run_step']
-            steps = self.pipeline_modules['steps']
-
-            # 初始化必要的组件
-            from pre.main.timing import StepTimer
-            import logging
-
-            # 创建logger
-            logger = logging.getLogger("FunClip")
-
-            # 创建计时器
-            timer = StepTimer()
-
-            # ASR 已禁用：不加载 funasr/VideoClipper，audio_clipper 保持为 None
-            audio_clipper = None
-
-            # 初始化pipeline（不需要参数）
-            init_pipeline()
-
-            current_video = input_video
-
-            # 执行各个步骤
-            for step_num in range(0, 10):  # 步骤0-9
-                if not config.get(f'enable_step{step_num}', True):
-                    print(f"⏭️ 跳过步骤{step_num}")
-                    continue
-
-                step_func = steps.get(step_num)
-                if not step_func:
-                    print(f"⚠️ 步骤{step_num}函数不存在")
-                    continue
-
-                step_name = self._get_step_name(step_num)
-                print(f"🔄 执行步骤{step_num}: {step_name}")
-                self.logger.info(f"执行步骤{step_num}: {step_name}")
-
-                # 开始阶段计时
-                gpu_accelerated = step_num in [2, 3]  # 语音识别和智能分割使用GPU
-                performance_tracker.start_stage(task_id, f"Stage{step_num} ({step_name})", gpu_accelerated)
-
-                # 记录资源使用
-                self.resource_monitor.record_step_resource(step_num, step_name)
-
-                # 运行步骤
-                success, output_file, duration = run_step(
-                    step_num, step_name, step_func, current_video,
-                    config, timer, audio_clipper, enabled=True
-                )
-
-                # 结束阶段计时
-                performance_tracker.end_stage(task_id, f"Stage{step_num} ({step_name})", gpu_accelerated)
-
-                if not success:
-                    print(f"❌ 步骤{step_num}执行失败")
-                    self.logger.error(f"步骤{step_num}执行失败")
-                    if config.get('stop_on_error', True):
-                        return False, None
-                    continue
-
-                if output_file:
-                    # 步骤0、4、5不改变视频文件路径，只是执行清理或生成辅助文件
-                    if step_num not in [0, 4, 5]:
-                        current_video = output_file
-                    print(f"✅ 步骤{step_num}完成，输出: {output_file}")
-                    self.logger.info(f"步骤{step_num}完成，输出: {output_file}")
-
-            print(f"🎉 Pipeline处理完成: {current_video}")
-
-            # 结束性能追踪并生成报告
-            report = performance_tracker.end_video_processing(task_id)
-            if report:
-                print(f"📊 性能报告生成成功，开始保存各种格式...")
-                # 生成所有格式的报告
-                report_files = report_generator.save_all_formats(report)
-                print(f"📊 报告文件生成完成: {list(report_files.keys())}")
-
-                # 将用户友好报告保存到任务metadata中，用于论坛回复
-                if task_id and hasattr(self, 'queue_manager'):
-                    task_obj = self.queue_manager.get_task(task_id)
-                    if task_obj and task_obj.metadata:
-                        user_report_content = report_files.get('user_report', '')
-                        if user_report_content:
-                            task_obj.metadata['user_report'] = user_report_content
-                            task_obj.metadata['technical_report'] = report_files.get('technical_report', '')
-                            self.queue_manager.update_task_metadata(task_id, task_obj.metadata)
-                            print(f"✅ 用户报告已保存到任务metadata (长度: {len(user_report_content)} 字符)")
-                        else:
-                            print(f"⚠️ 用户报告内容为空，无法保存到metadata")
-                    else:
-                        print(f"⚠️ 无法获取任务或任务metadata为空: task_id={task_id}")
-                else:
-                    print(f"⚠️ 缺少task_id或queue_manager: task_id={task_id}, has_queue_manager={hasattr(self, 'queue_manager')}")
-            else:
-                print(f"⚠️ 性能跟踪器没有返回报告，任务ID: {task_id}")
-
-            return True, current_video
-
-        except Exception as e:
-            print(f"❌ Pipeline内部处理异常: {e}")
-            self.logger.error(f"Pipeline内部处理异常: {e}")
-            import traceback
-            self.logger.error(traceback.format_exc())
-
-            # 记录错误到性能追踪器
-            performance_tracker.add_error(task_id, f"Pipeline处理异常: {str(e)}")
-            performance_tracker.end_video_processing(task_id)
-
-            return False, None
+        raise NotImplementedError("视频流水线已移除：当前系统为TTS/配音专用模式")
 
     def _run_pipeline(self, input_video: str, config: Dict[str, Any],
                      logger, timer, audio_clipper) -> tuple:
         """运行处理流水线"""
-        current_video = input_video
-        run_step = self.pipeline_modules['run_step']
-        steps = self.pipeline_modules['steps']
-        
-        try:
-            # 执行各个步骤
-            for step_num in range(1, 10):  # 步骤1-9
-                if not config.get(f'enable_step{step_num}', True):
-                    continue
-                
-                step_func = steps.get(step_num)
-                if not step_func:
-                    continue
-                
-                step_name = self._get_step_name(step_num)
-                
-                # 记录资源使用
-                self.resource_monitor.record_step_resource(step_num, step_name)
-                
-                # 运行步骤
-                success, output_file, duration = run_step(
-                    step_num, step_name, step_func, current_video,
-                    config, timer, audio_clipper, enabled=True
-                )
-                
-                if not success:
-                    if config.get('stop_on_error', True):
-                        return False, None
-                    continue
-                
-                if output_file:
-                    # 步骤0、4、5不改变视频文件路径，只是执行清理或生成辅助文件
-                    if step_num not in [0, 4, 5]:
-                        current_video = output_file
-            
-            return True, current_video
-            
-        except Exception as e:
-            self.logger.error(f"Pipeline执行错误: {e}")
-            return False, None
+        raise NotImplementedError("视频流水线已移除：当前系统为TTS/配音专用模式")
 
     def _run_pipeline_subprocess(self, cmd: list, task_id: str) -> tuple:
         """使用subprocess运行pipeline命令"""
-        try:
-            self.logger.info(f"启动pipeline子进程: {' '.join(cmd)}")
+        raise NotImplementedError("视频流水线已移除：当前系统为TTS/配音专用模式")
 
-            # 启动子进程，实时显示输出
-            process = subprocess.Popen(
-                cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,  # 合并stderr到stdout
-                text=True,
-                cwd=os.getcwd(),
-                env=os.environ.copy(),
-                bufsize=1,  # 行缓冲
-                universal_newlines=True
-            )
 
-            print(f"📋 Pipeline详细日志 (任务: {task_id}):")
-            print("=" * 80)
 
-            # 实时读取并显示输出
-            output_lines = []
-            while True:
-                line = process.stdout.readline()
-                if not line and process.poll() is not None:
-                    break
-                if line:
-                    line = line.rstrip()
-                    print(f"📄 {line}")  # 实时显示每一行
-                    output_lines.append(line)
-                    self.logger.debug(f"Pipeline输出: {line}")
-
-            # 等待进程完成
-            process.wait()
-
-            print("=" * 80)
-            print(f"📋 Pipeline执行完成 (返回码: {process.returncode})")
-
-            # 检查返回码
-            if process.returncode == 0:
-                print(f"✅ Pipeline执行成功: {task_id}")
-                self.logger.info(f"Pipeline执行成功: {task_id}")
-
-                # 查找输出文件 - 使用绝对路径
-                output_dir = os.path.abspath(os.path.join(self.config.output_dir, task_id))
-                output_file = self._find_output_file(output_dir)
-
-                return True, output_file
-            else:
-                print(f"❌ Pipeline执行失败: {task_id} (返回码: {process.returncode})")
-                self.logger.error(f"Pipeline执行失败: {task_id}")
-                return False, None
-
-        except Exception as e:
-            print(f"❌ Pipeline子进程执行异常: {e}")
-            self.logger.error(f"Pipeline子进程执行异常: {e}")
-            return False, None
-
-    def _find_output_file(self, output_dir: str) -> Optional[str]:
-        """查找输出目录中的主要视频文件"""
-        if not os.path.exists(output_dir):
-            return None
-
-        try:
-            # 查找视频文件
-            video_extensions = ['.mp4', '.avi', '.mov', '.mkv']
-            for file in os.listdir(output_dir):
-                if any(file.lower().endswith(ext) for ext in video_extensions):
-                    return os.path.join(output_dir, file)
-
-            # 如果没有找到视频文件，返回目录路径
-            return output_dir
-
-        except Exception as e:
-            self.logger.warning(f"查找输出文件失败: {e}")
-            return output_dir
-
-    def _get_step_name(self, step_num: int) -> str:
-        """获取步骤名称"""
-        step_names = {
-            1: "视频转码",
-            2: "移除静音",
-            3: "视频修复",
-            4: "语音识别",
-            5: "AI处理",
-            6: "视频剪辑",
-            7: "添加字幕",
-            8: "添加标题",
-            9: "文件整理"
-        }
-        return step_names.get(step_num, f"步骤{step_num}")
-
-    def _get_video_duration(self, video_path: str) -> float:
-        """获取视频时长（秒）"""
-        try:
-            import subprocess
-            import json
-
-            # 使用ffprobe获取视频信息
-            cmd = [
-                'ffprobe',
-                '-v', 'quiet',
-                '-print_format', 'json',
-                '-show_format',
-                video_path
-            ]
-
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-
-            if result.returncode == 0:
-                data = json.loads(result.stdout)
-                duration = float(data['format']['duration'])
-                print(f"📏 视频时长: {duration:.1f}秒 ({duration/60:.1f}分钟)")
-                return duration
-            else:
-                print(f"⚠️ ffprobe执行失败: {result.stderr}")
-                return 0.0
-
-        except subprocess.TimeoutExpired:
-            print("⚠️ ffprobe执行超时")
-            return 0.0
-        except Exception as e:
-            print(f"⚠️ 获取视频时长失败: {e}")
-            return 0.0
 
     def _save_forum_info_to_output(self, task: VideoTask, output_dir: str):
         """保存论坛帖子信息到输出目录"""
@@ -1012,7 +455,7 @@ class TaskProcessor:
 
             # 检查是否有论坛相关信息 - 使用更宽松的判断
             metadata = task.metadata
-            
+
             # 打印metadata信息用于调试
             print(f"🔍 [DEBUG] 检查是否保存forum_post_info.json:")
             print(f"   - source: {metadata.get('source', 'None')}")
@@ -1020,7 +463,7 @@ class TaskProcessor:
             print(f"   - is_cluster_task: {metadata.get('is_cluster_task', False)}")
             print(f"   - post_id: {metadata.get('post_id', 'None')}")
             print(f"   - post_url: {metadata.get('post_url', 'None')}")
-            
+
             # 只要有post_url或者标记为论坛/集群任务，就保存文件
             should_save = (
                 metadata.get('post_url', '') != '' or
@@ -1028,16 +471,16 @@ class TaskProcessor:
                 metadata.get('is_cluster_task', False) or
                 metadata.get('source') in ['forum', 'forum_manual']
             )
-            
+
             if not should_save:
                 print(f"⚠️ 不满足保存条件，跳过保存forum_post_info.json")
                 return
-            
+
             print(f"✅ 满足保存条件，开始保存forum_post_info.json")
 
             # 导入数据模型
             from lightweight.forum_data_model import ForumPostInfo
-            
+
             # 提取论坛信息
             print(f"🔍 [DEBUG] 任务metadata内容: {metadata}")
             print(f"🔍 [DEBUG] metadata中的封面标题字段:")
@@ -1053,13 +496,13 @@ class TaskProcessor:
             forum_post.original_filename = metadata.get('original_filename', '')
             forum_post.post_url = metadata.get('post_url', '')
             forum_post.source = metadata.get('source', 'forum')
-            
+
             # 添加封面标题（使用语义化结构）
             for position in ['up', 'middle', 'down']:
                 key = f'cover_title_{position}'
                 if key in metadata and metadata[key]:
                     forum_post.add_cover_title(metadata[key], position)
-            
+
             # 转换为字典（包含新旧格式）
             forum_info = forum_post.to_dict()
 
@@ -1135,7 +578,7 @@ class TaskProcessor:
             import traceback
             traceback.print_exc()
             self.logger.error(traceback.format_exc())
-    
+
     def _process_upload(self, task: VideoTask):
         """处理上传任务 - 直接回复到论坛"""
         try:
@@ -1587,7 +1030,7 @@ class TaskProcessor:
             print(f"❌ 发送论坛回复异常: {e}")
             self.logger.error(f"发送论坛回复失败: {e}")
             return False
-    
+
     def _cleanup_task_files(self, task: VideoTask):
         """清理任务文件"""
         try:
@@ -1611,7 +1054,7 @@ class TaskProcessor:
 
         except Exception as e:
             self.logger.warning(f"清理任务文件失败 {task.task_id}: {e}")
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """获取处理器统计信息"""
         return {

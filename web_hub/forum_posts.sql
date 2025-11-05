@@ -35,7 +35,14 @@ CREATE TABLE IF NOT EXISTS forum_posts (
     processing_status VARCHAR(20) DEFAULT 'pending', -- pending, processing, completed, failed
     task_id VARCHAR(50),                           -- 关联的处理任务ID
     output_path TEXT,                              -- 处理后的输出路径
-    
+
+    -- 集群监控专用字段
+    machine_url TEXT,                              -- 分配的处理机器URL
+    dispatch_time DATETIME,                        -- 任务分发时间
+    completion_time DATETIME,                      -- 任务完成时间
+    error_message TEXT,                            -- 错误信息
+    retry_count INTEGER DEFAULT 0,                 -- 重试次数
+
     -- 回复状态
     reply_status VARCHAR(20) DEFAULT 'pending',    -- pending, sent, failed
     reply_content TEXT,                            -- 回复内容
@@ -122,6 +129,8 @@ CREATE INDEX IF NOT EXISTS idx_forum_posts_discovered_time ON forum_posts(discov
 CREATE INDEX IF NOT EXISTS idx_forum_posts_is_processed ON forum_posts(is_processed);
 CREATE INDEX IF NOT EXISTS idx_forum_posts_is_replied ON forum_posts(is_replied);
 CREATE INDEX IF NOT EXISTS idx_forum_posts_priority ON forum_posts(priority);
+CREATE INDEX IF NOT EXISTS idx_forum_posts_machine_url ON forum_posts(machine_url);
+CREATE INDEX IF NOT EXISTS idx_forum_posts_dispatch_time ON forum_posts(dispatch_time);
 
 -- 媒体文件表索引
 CREATE INDEX IF NOT EXISTS idx_media_files_post_id ON forum_media_files(post_id);

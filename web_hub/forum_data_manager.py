@@ -168,18 +168,46 @@ class HybridForumDataManager:
             # 确保数据目录存在
             os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
 
-            # 检查是否缺少关键字段
-            if self._missing_required_columns():
+            # 检查是否缺少关键字段（确保检查后连接已关闭）
+            needs_rebuild = False
+            if os.path.exists(self.db_path):
+                needs_rebuild = self._missing_required_columns()
+
+            if needs_rebuild:
                 self.logger.info("检测到数据库结构不完整，重新初始化")
+                # 确保所有数据库连接都已关闭
+                import gc
+                gc.collect()  # 强制垃圾回收，关闭未关闭的连接
+
                 # 简单粗暴：删除旧数据库，重新创建
                 if os.path.exists(self.db_path):
-                    backup_path = f"{self.db_path}.backup"
-                    os.rename(self.db_path, backup_path)
+                    # 生成唯一的备份文件名，避免 Windows 上因同名导致的 WinError 183
+                    from datetime import datetime
+                    base_backup = f"{self.db_path}.backup"
+                    if os.path.exists(base_backup):
+                        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        candidate = f"{base_backup}.{ts}"
+                        idx = 1
+                        while os.path.exists(candidate):
+                            candidate = f"{base_backup}.{ts}.{idx}"
+                            idx += 1
+                        backup_path = candidate
+                    else:
+                        backup_path = base_backup
+
+                    # 使用 os.replace 提高在 Windows 上的兼容性
+                    os.replace(self.db_path, backup_path)
                     self.logger.info(f"已备份旧数据库到: {backup_path}")
 
-            # 执行SQL脚本创建表结构
-            sql_script_path = "forum_posts.sql"
-            if os.path.exists(sql_script_path):
+            # 执行SQL脚本创建表结构（从可靠路径查找）
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            candidate_paths = [
+                os.path.join(base_dir, "forum_posts.sql"),                # web_hub/forum_posts.sql
+                os.path.join(os.getcwd(), "web_hub", "forum_posts.sql"), # 兼容从仓库根目录运行
+                os.path.join(os.getcwd(), "forum_posts.sql"),             # 兼容当前目录
+            ]
+            sql_script_path = next((p for p in candidate_paths if os.path.exists(p)), None)
+            if sql_script_path:
                 with open(sql_script_path, 'r', encoding='utf-8') as f:
                     sql_script = f.read()
 
@@ -187,12 +215,14 @@ class HybridForumDataManager:
                     conn.executescript(sql_script)
                     conn.commit()
 
-                self.logger.info("SQLite数据库初始化成功")
+                self.logger.info(f"SQLite数据库初始化成功（脚本: {sql_script_path}）")
             else:
-                self.logger.warning(f"SQL脚本文件不存在: {sql_script_path}")
+                self.logger.error(f"SQL脚本文件不存在，已尝试路径: {candidate_paths}")
 
         except Exception as e:
+            import traceback
             self.logger.error(f"SQLite初始化失败: {e}")
+            self.logger.error(f"详细错误: {traceback.format_exc()}")
             raise
 
     def _missing_required_columns(self):

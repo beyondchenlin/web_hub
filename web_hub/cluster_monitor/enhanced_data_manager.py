@@ -51,7 +51,7 @@ class ForumPostRecord:
     content_length: int = 0
     tags: List[str] = None
     created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    last_updated: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
         """转换为字典"""
@@ -69,7 +69,7 @@ class ForumPostRecord:
     def from_dict(cls, data: Dict[str, Any]) -> 'ForumPostRecord':
         """从字典创建对象"""
         # 处理datetime字段
-        datetime_fields = ['discovered_time', 'dispatch_time', 'completion_time', 'created_at', 'updated_at']
+        datetime_fields = ['discovered_time', 'dispatch_time', 'completion_time', 'created_at', 'last_updated']
         for field in datetime_fields:
             if data.get(field):
                 data[field] = datetime.fromisoformat(data[field])
@@ -84,7 +84,7 @@ class ForumPostRecord:
             'discovered_time', 'processing_status', 'dispatch_time',
             'completion_time', 'task_id', 'machine_url', 'error_message',
             'retry_count', 'has_video', 'has_audio', 'media_count',
-            'content_length', 'tags', 'created_at', 'updated_at'
+            'content_length', 'tags', 'created_at', 'last_updated'
         }
 
         filtered_data = {k: v for k, v in data.items() if k in valid_fields}
@@ -130,33 +130,83 @@ class SQLiteRedisDataManager:
         print(f"   Redis: {'✅ 可用' if self.redis_client else '❌ 不可用，使用SQLite模式'}")
         
     def _init_database(self):
-        """初始化SQLite数据库"""
+        """初始化SQLite数据库 - 使用统一的SQL脚本"""
         try:
+            # 尝试使用统一的 forum_posts.sql 脚本（与工作节点相同）
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            candidate_paths = [
+                os.path.join(base_dir, "forum_posts.sql"),                # web_hub/forum_posts.sql
+                os.path.join(os.getcwd(), "web_hub", "forum_posts.sql"), # 从仓库根目录运行
+                os.path.join(os.getcwd(), "forum_posts.sql"),             # 当前目录
+            ]
+
+            sql_script_path = next((p for p in candidate_paths if os.path.exists(p)), None)
+
+            if sql_script_path:
+                # 使用统一的SQL脚本创建表
+                self.logger.info(f"使用统一SQL脚本初始化数据库: {sql_script_path}")
+                with open(sql_script_path, 'r', encoding='utf-8') as f:
+                    sql_script = f.read()
+
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.executescript(sql_script)
+                    conn.commit()
+
+                self.logger.info("SQLite数据库初始化成功（使用统一脚本）")
+            else:
+                # 降级方案：手动创建表（兼容旧版本）
+                self.logger.warning("未找到forum_posts.sql，使用内置表结构")
+                with sqlite3.connect(self.db_path) as conn:
+                    conn.execute("""
+                    CREATE TABLE IF NOT EXISTS forum_posts (
+                        post_id TEXT PRIMARY KEY,
+                        thread_id TEXT NOT NULL,
+                        title TEXT NOT NULL,
+                        author_name TEXT NOT NULL,
+                        post_url TEXT NOT NULL,
+                        discovered_time TEXT NOT NULL,
+                        processing_status TEXT DEFAULT 'discovered',
+                        dispatch_time TEXT,
+                        completion_time TEXT,
+                        task_id TEXT,
+                        machine_url TEXT,
+                        error_message TEXT,
+                        retry_count INTEGER DEFAULT 0,
+                        has_video BOOLEAN DEFAULT FALSE,
+                        has_audio BOOLEAN DEFAULT FALSE,
+                        media_count INTEGER DEFAULT 0,
+                        content_length INTEGER DEFAULT 0,
+                        tags TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        last_updated TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                    """)
+                    conn.commit()
+
+            # 兼容性检查：如果是旧数据库，添加缺失的监控字段
             with sqlite3.connect(self.db_path) as conn:
-                conn.execute("""
-                CREATE TABLE IF NOT EXISTS forum_posts (
-                    post_id TEXT PRIMARY KEY,
-                    thread_id TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    author_name TEXT NOT NULL,
-                    post_url TEXT NOT NULL,
-                    discovered_time TEXT NOT NULL,
-                    processing_status TEXT DEFAULT 'discovered',
-                    dispatch_time TEXT,
-                    completion_time TEXT,
-                    task_id TEXT,
-                    machine_url TEXT,
-                    error_message TEXT,
-                    retry_count INTEGER DEFAULT 0,
-                    has_video BOOLEAN DEFAULT FALSE,
-                    has_audio BOOLEAN DEFAULT FALSE,
-                    media_count INTEGER DEFAULT 0,
-                    content_length INTEGER DEFAULT 0,
-                    tags TEXT,
-                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-                )
-                """)
+                cursor = conn.execute("PRAGMA table_info(forum_posts)")
+                existing_columns = {row[1] for row in cursor.fetchall()}
+
+                # 监控节点必需的字段
+                required_fields = {
+                    'machine_url': 'TEXT',
+                    'dispatch_time': 'TEXT',
+                    'completion_time': 'TEXT',
+                    'error_message': 'TEXT',
+                    'retry_count': 'INTEGER DEFAULT 0',
+                }
+
+                # 添加缺失的字段（兼容旧数据库）
+                for field_name, field_type in required_fields.items():
+                    if field_name not in existing_columns:
+                        try:
+                            conn.execute(f"ALTER TABLE forum_posts ADD COLUMN {field_name} {field_type}")
+                            self.logger.info(f"添加监控字段: {field_name}")
+                        except Exception as e:
+                            self.logger.warning(f"添加字段 {field_name} 失败（可能已存在）: {e}")
+
+                conn.commit()
 
                 # 创建索引
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_status ON forum_posts(processing_status)")
@@ -214,7 +264,7 @@ class SQLiteRedisDataManager:
         try:
             data = post.to_dict()
             data['tags'] = json.dumps(data['tags'], ensure_ascii=False)
-            data['updated_at'] = datetime.now().isoformat()
+            data['last_updated'] = datetime.now().isoformat()
 
             # 移除不存在的字段
             valid_columns = [
@@ -222,7 +272,7 @@ class SQLiteRedisDataManager:
                 'discovered_time', 'processing_status', 'dispatch_time',
                 'completion_time', 'task_id', 'machine_url', 'error_message',
                 'retry_count', 'has_video', 'has_audio', 'media_count',
-                'content_length', 'tags', 'updated_at'
+                'content_length', 'tags', 'last_updated'
             ]
 
             filtered_data = {k: v for k, v in data.items() if k in valid_columns}
@@ -440,7 +490,7 @@ class SQLiteRedisDataManager:
         try:
             with self._lock:
                 # 构建更新字段
-                update_fields = ["processing_status = ?", "updated_at = ?"]
+                update_fields = ["processing_status = ?", "last_updated = ?"]
                 values = [status, datetime.now().isoformat()]
 
                 # 添加其他字段

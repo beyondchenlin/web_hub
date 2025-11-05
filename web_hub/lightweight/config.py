@@ -71,6 +71,9 @@ class LightweightConfig:
     retry_attempts: int = 3
     retry_delay: int = 60  # 秒
 
+    # 功能开关
+
+
     # 文件路径配置
     input_dir: str = "input"
     output_dir: str = "output"
@@ -258,6 +261,7 @@ class ConfigManager:
             'LOG_BACKUP_COUNT': ('log_backup_count', int),
             'USE_GPU': ('use_gpu', bool),
             'GPU_AUTO_DETECT': ('gpu_auto_detect', bool),
+
         }
 
         for env_key, config_mapping in env_mappings.items():

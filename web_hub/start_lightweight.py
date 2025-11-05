@@ -31,9 +31,9 @@ def test_system(test_mode=False, role="worker"):
     try:
         # 🔧 关键修复：在配置加载前设置环境变量
         is_monitor = (role == "monitor")
-        # 工作节点也需要FORUM_ENABLED=true来支持封面标题和热词功能
-        os.environ['FORUM_ENABLED'] = 'true'  # 监控节点和工作节点都需要论坛功能
-        os.environ['FORUM_PARSING_ENABLED'] = 'true'  # 工作节点需要解析论坛URL
+        # 仅监控节点启用论坛监控；工作节点仅启用解析能力
+        os.environ['FORUM_ENABLED'] = 'true' if is_monitor else 'false'
+        os.environ['FORUM_PARSING_ENABLED'] = 'true'
 
         # 测试配置
         from lightweight.config import get_config_manager
@@ -52,7 +52,7 @@ def test_system(test_mode=False, role="worker"):
         else:
             print(f"✅ 配置系统正常 - 运行模式: {config.mode}")
             print(f"✅ 集群角色: 🔗 集群工作节点")
-            print(f"✅ 处理能力: 完整视频处理流程")
+            print(f"✅ 处理能力: 仅TTS/配音")
 
         # 测试队列管理器
         from lightweight.queue_manager import QueueManager
@@ -96,7 +96,7 @@ def start_system(test_mode=False, test_once=False, role="worker", port=8005):
         mode_name = "🎯 集群监控节点"
     else:
         mode_name = "🔗 集群工作节点"
-    print(f"🚀 启动集群视频处理系统 - {mode_name}...")
+    print(f"🚀 启动集群TTS/配音系统 - {mode_name}...")
 
     try:
         from main_lightweight import LightweightVideoProcessor
@@ -126,7 +126,8 @@ def start_system(test_mode=False, test_once=False, role="worker", port=8005):
         else:
             print(f"   - 集群角色: 🔗 工作节点")
             print(f"   - 论坛集成: ✅ 自动启用（处理任务）")
-        print(f"   - 监控频率: {processor.config.forum_check_interval}秒")
+        if is_monitor:
+            print(f"   - 监控频率: {processor.config.forum_check_interval}秒")
         print(f"   - 最大并发: {processor.config.max_concurrent_videos}")
         print(f"   - Redis主机: {processor.config.redis_host}:{processor.config.redis_port}")
         print(f"   - Web端口: {processor.config.web_port}")
@@ -149,10 +150,10 @@ def start_system(test_mode=False, test_once=False, role="worker", port=8005):
         if is_monitor:
             print("   - 监控节点：自动监控论坛，发现新帖后分发给工作节点")
         else:
-            print("   - 工作节点：等待接收URL，执行完整处理流程")
-            print("   - 接收到URL后完整处理")
+            print("   - 工作节点：等待接收TTS/配音任务或论坛URL，执行TTS/配音")
+            print("   - 接收到任务后执行TTS/配音并回复")
         print("   - 访问Web界面查看系统状态")
-        print("   - 在Web界面中创建视频处理任务")
+        print("   - 在Web界面中创建TTS/配音任务")
         print("   - 按 Ctrl+C 停止系统")
         
         # 保持运行
@@ -356,12 +357,12 @@ def add_cluster_api(processor):
 def main():
     """主函数"""
     # 解析命令行参数
-    parser = argparse.ArgumentParser(description="并行流水线视频处理系统")
+    parser = argparse.ArgumentParser(description="TTS/配音处理系统")
     parser.add_argument("--test", action="store_true", help="启动测试模式（重启后处理所有帖子）")
     parser.add_argument("--test-once", action="store_true", help="测试模式单次运行（处理一轮后停止）")
     # 集群角色：monitor=监控节点，worker=工作节点（默认）
     parser.add_argument("--role", type=str, choices=['monitor', 'worker'], default='worker',
-                       help="集群角色：monitor=监控节点（监控论坛），worker=工作节点（处理视频，默认）")
+                       help="集群角色：monitor=监控节点（监控论坛），worker=工作节点（处理TTS/配音，默认）")
     parser.add_argument("--port", type=int, default=8005, help="Web服务器端口")
     parser.add_argument("--log-mode", choices=['development', 'production', 'silent'],
                        default='development', help="日志模式")
@@ -424,7 +425,7 @@ def main():
     print(f"🔧 集群角色: {role} ({'🎯 监控节点' if role == 'monitor' else '🔗 工作节点'})")
 
     print("=" * 60)
-    print("🎬 并行流水线视频处理系统")
+    print("🎤 TTS/配音处理系统")
     print("=" * 60)
     print(f"📋 启动模式: {mode_name}")
     print(f"📊 日志模式: {log_mode}")
@@ -465,7 +466,8 @@ def main():
         print("   - 每处理完一个帖子立即保存")
         print("   - 适合正式运营环境")
 
-    print(f"⚡ 监控频率: 每10秒检查一次论坛")
+    if role == 'monitor':
+        print(f"⚡ 监控频率: 每10秒检查一次论坛")
     print()
 
     # 测试系统
