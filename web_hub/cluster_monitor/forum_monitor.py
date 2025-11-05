@@ -844,42 +844,53 @@ class ForumMonitor:
         """
         检测任务类型
 
-        🎯 精确匹配论坛实际使用的标记：
+        🎯 优先使用Discuz论坛的分类字段（category），更精确可靠
         - 制作AI声音 → TTS任务
         - 音色克隆 → 音色克隆任务
         - 其他 → 视频任务
         """
+        # 🎯 方法1: 优先使用论坛分类字段（最可靠）
+        category = (task_data.get('category') or '').strip()
+        if category:
+            print(f"🏷️ 检测到论坛分类: {category}")
+
+            # 音色克隆分类
+            if '音色克隆' in category:
+                print(f"✅ 根据分类判断为: 音色克隆")
+                return TaskType.VOICE_CLONE
+
+            # TTS分类
+            if '制作AI声音' in category or '制作ai声音' in category:
+                print(f"✅ 根据分类判断为: TTS")
+                return TaskType.TTS
+
+        # 🎯 方法2: 回退到标题和内容检测（兼容旧数据）
         title = (task_data.get('title') or '')
         content = (task_data.get('content') or '')
 
-        # 🎯 音色克隆标记（论坛实际使用的格式）
-        clone_markers = [
-            '【音色克隆】',
-            '[音色克隆]',
-            '音色克隆'
-        ]
+        # 音色克隆标记
+        clone_markers = ['【音色克隆】', '[音色克隆]', '音色克隆']
 
-        # 🎯 TTS标记（论坛实际使用的格式）
+        # TTS标记
         tts_markers = [
-            '【制作AI声音】',
-            '[制作AI声音]',
-            '制作AI声音',
-            '【制作ai声音】',  # 小写变体
-            '[制作ai声音]',
-            '制作ai声音'
+            '【制作AI声音】', '[制作AI声音]', '制作AI声音',
+            '【制作ai声音】', '[制作ai声音]', '制作ai声音'
         ]
 
         # 检查音色克隆（优先级高）
         for marker in clone_markers:
             if marker in title or marker in content:
+                print(f"✅ 根据内容标记判断为: 音色克隆")
                 return TaskType.VOICE_CLONE
 
         # 检查TTS
         for marker in tts_markers:
             if marker in title or marker in content:
+                print(f"✅ 根据内容标记判断为: TTS")
                 return TaskType.TTS
 
         # 默认为视频任务
+        print(f"✅ 默认判断为: 视频")
         return TaskType.VIDEO
 
     def _build_queue_payload(self, post_data: Dict, formatted_task: Dict) -> Dict:

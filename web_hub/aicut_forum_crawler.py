@@ -478,6 +478,9 @@ class AicutForumCrawler:
             # 结构化内容处理
             structured_content = self._process_structured_content(content)
 
+            # 🎯 提取帖子分类信息（Discuz的caption字段）
+            category = self._extract_category(soup)
+
             return {
                 'content': content,                                    # 原始内容
                 'structured_content': structured_content,             # 结构化内容
@@ -487,6 +490,7 @@ class AicutForumCrawler:
                 'audio_urls': audio_urls,
                 'attachments': attachments,
                 'cover_info': cover_info,
+                'category': category,                                  # 🎯 帖子分类
                 'has_video': len(video_urls) > 0 or len(attachments) > 0,
                 'has_audio': len(audio_urls) > 0
             }
@@ -725,6 +729,77 @@ class AicutForumCrawler:
             pass
 
         return cover_info
+
+    def _extract_category(self, soup: BeautifulSoup) -> str:
+        """
+        提取帖子分类信息
+
+        🎯 根据Discuz论坛的分类信息字段判断：
+        - 如果有 choose 字段 → 制作AI声音
+        - 如果有 clone 字段 → 音色克隆
+
+        返回: 分类名称（如"制作AI声音"、"音色克隆"）
+        """
+        category = ""
+
+        try:
+            html_text = str(soup)
+
+            # 🎯 方法1: 检测Discuz分类信息字段（最可靠）
+            # 制作AI声音: 字段名 choose (选择音色)
+            # 音色克隆: 字段名 clone (音色名称)
+
+            # 查找分类信息字段（通常在帖子内容区域）
+            # Discuz的分类信息字段格式: <em>字段名:</em> 值
+
+            # 检查是否有 choose 字段
+            if re.search(r'\bchoose\b', html_text, re.I):
+                # 进一步确认是分类字段，不是其他用途
+                # 查找 "选择音色" 相关文本
+                if '选择音色' in html_text or 'choose' in html_text.lower():
+                    category = "制作AI声音"
+                    print(f"🏷️ 检测到 choose 字段 → {category}")
+                    return category
+
+            # 检查是否有 clone 字段（排除 voice_clone 等）
+            if re.search(r'\bclone\b', html_text, re.I):
+                # 排除代码中的clone
+                if '音色名称' in html_text or ('clone' in html_text.lower() and 'voice_clone' not in html_text.lower()):
+                    category = "音色克隆"
+                    print(f"🏷️ 检测到 clone 字段 → {category}")
+                    return category
+
+            # 🎯 方法2: 查找caption元素（备用）
+            caption = soup.find('caption')
+            if caption:
+                category = caption.get_text(strip=True)
+                if category:
+                    print(f"🏷️ 从caption提取分类: {category}")
+                    return category
+
+            # 🎯 方法3: 从帖子内容中查找分类标记
+            # 查找 "制作AI声音" 或 "音色克隆" 文本
+            post_content = soup.find('td', class_='t_f') or soup.find('div', class_='t_fsz')
+            if post_content:
+                content_text = post_content.get_text(strip=True)
+
+                # 检查内容前100个字符
+                first_lines = content_text[:100]
+
+                if '制作AI声音' in first_lines or '制作ai声音' in first_lines:
+                    category = "制作AI声音"
+                    print(f"🏷️ 从内容检测到: {category}")
+                    return category
+
+                if '音色克隆' in first_lines:
+                    category = "音色克隆"
+                    print(f"🏷️ 从内容检测到: {category}")
+                    return category
+
+        except Exception as e:
+            print(f"⚠️ 提取分类信息失败: {e}")
+
+        return category
 
     def _process_structured_content(self, content: str) -> Dict[str, Any]:
         """处理结构化内容"""
