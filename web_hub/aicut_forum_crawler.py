@@ -510,6 +510,22 @@ class AicutForumCrawler:
                     audio_urls.append(audio_url)
                     print(f"🎵 从附件中提取音频URL: {audio_url}")
 
+            # 🎯 提取作者信息（从帖子页面）
+            author = "未知用户"
+            author_id = ""
+            try:
+                # 查找作者链接（在帖子详情页中）
+                author_link = soup.find('a', href=re.compile(r'space-uid-\d+\.html'))
+                if author_link:
+                    author = author_link.get_text(strip=True)
+                    author_href = author_link.get('href', '')
+                    author_id_match = re.search(r'space-uid-(\d+)\.html', author_href)
+                    if author_id_match:
+                        author_id = author_id_match.group(1)
+                        print(f"👤 提取作者信息: {author} (ID: {author_id})")
+            except Exception as e:
+                print(f"⚠️ 提取作者信息失败: {e}")
+
             return {
                 'content': content,                                    # 原始内容
                 'structured_content': structured_content,             # 结构化内容
@@ -520,6 +536,8 @@ class AicutForumCrawler:
                 'attachments': attachments,
                 'cover_info': cover_info,
                 'category': category,                                  # 🎯 帖子分类
+                'author': author,                                      # 🎯 作者名称
+                'author_id': author_id,                                # 🎯 作者ID
                 'has_video': len(video_urls) > 0 or len(attachments) > 0,
                 'has_audio': len(audio_urls) > 0
             }
@@ -535,6 +553,8 @@ class AicutForumCrawler:
                 # 🎯 源头修复：错误情况下也提供空的封面标题字段
                 'cover_title_up': '',
                 'cover_title_down': '',
+                'author': '未知用户',
+                'author_id': '',
                 'has_video': False,
                 'has_audio': False
             }
