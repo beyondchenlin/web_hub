@@ -370,6 +370,14 @@ class AicutForumCrawler:
                     author_link = row.find('a', href=re.compile(r'space-uid-\d+\.html'))
                     author = author_link.get_text(strip=True) if author_link else "未知用户"
 
+                    # 🎯 提取作者ID（从 space-uid-123.html 中提取 123）
+                    author_id = ""
+                    if author_link:
+                        author_href = author_link.get('href', '')
+                        author_id_match = re.search(r'space-uid-(\d+)\.html', author_href)
+                        if author_id_match:
+                            author_id = author_id_match.group(1)
+
                     # 查找发帖时间
                     time_elements = row.find_all('em')
                     post_time = ""
@@ -383,6 +391,7 @@ class AicutForumCrawler:
                         'thread_id': thread_id,
                         'title': title,
                         'author': author,
+                        'author_id': author_id,  # 🎯 添加作者ID
                         'thread_url': thread_url,
                         'post_time': post_time,
                         'forum_id': 2,
