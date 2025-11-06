@@ -26,16 +26,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-# 尝试导入 Selenium（可选）
-try:
-    from selenium import webdriver
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.chrome.options import Options
-    SELENIUM_AVAILABLE = True
-except ImportError:
-    SELENIUM_AVAILABLE = False
+from shared.forum_config import load_forum_settings
 
 
 class AicutForumCrawler:
@@ -43,9 +34,6 @@ class AicutForumCrawler:
 
     def __init__(self, username: str = "", password: str = "", test_mode: bool = True, test_once: bool = False,
                  base_url: str = "", forum_url: str = ""):
-        # 延迟导入避免循环导入
-        from shared.forum_config import load_forum_settings
-
         # 统一从配置文件加载默认设置
         settings = load_forum_settings()
         forum_cfg = settings.get("forum", {})
@@ -262,9 +250,7 @@ class AicutForumCrawler:
     def get_forum_threads(self) -> List[Dict[str, Any]]:
         """获取智能剪口播板块的所有帖子"""
         try:
-            # 只在首次检查时显示详细URL
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print(f"📋 获取板块帖子: {self.forum_url}")
+            print(f"📋 获取板块帖子: {self.forum_url}")
 
             # 🎯 增加重试机制处理网络超时
             max_retries = 3
@@ -273,12 +259,9 @@ class AicutForumCrawler:
 
             for attempt in range(max_retries):
                 try:
-                    # 只在首次检查或重试时显示详细信息
-                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed or attempt > 0:
-                        print(f"🌐 请求板块页面... (尝试 {attempt + 1}/{max_retries})")
+                    print(f"🌐 请求板块页面... (尝试 {attempt + 1}/{max_retries})")
                     response = self.session.get(self.forum_url, timeout=15)
-                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed or attempt > 0:
-                        print(f"📄 板块页面状态码: {response.status_code}")
+                    print(f"📄 板块页面状态码: {response.status_code}")
                     response.raise_for_status()
                     break  # 成功，跳出重试循环
                 except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
@@ -297,22 +280,17 @@ class AicutForumCrawler:
 
             # 保存页面内容用于调试
             page_content = response.text
-            # 只在首次检查时显示页面内容长度
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print(f"📄 页面内容长度: {len(page_content)} 字符")
+            print(f"📄 页面内容长度: {len(page_content)} 字符")
 
             soup = BeautifulSoup(page_content, 'html.parser')
             threads = []
 
             # 查找帖子列表 - 尝试多种选择器
-            # 只在首次检查时显示详细查找信息
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print("🔍 查找帖子列表...")
+            print("🔍 查找帖子列表...")
 
             # 方法1: 查找tbody标签
             thread_rows = soup.find_all('tbody')
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print(f"🔍 找到 {len(thread_rows)} 个tbody元素")
+            print(f"🔍 找到 {len(thread_rows)} 个tbody元素")
 
             # 方法2: 如果tbody没找到，尝试其他选择器
             if not thread_rows:
@@ -428,24 +406,13 @@ class AicutForumCrawler:
                     }
 
                     threads.append(thread_info)
-                    # 只在调试模式或首次检查时显示所有帖子
-                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                        print(f"📝 发现帖子 {len(threads)}: {title} (ID: {thread_id}) - 作者: {author}")
+                    print(f"📝 发现帖子 {len(threads)}: {title} (ID: {thread_id}) - 作者: {author}")
 
                 except Exception as e:
                     print(f"⚠️ 解析第 {i+1} 个帖子行失败: {e}")
                     continue
 
-            # 简化日志输出
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print(f"📊 共发现 {len(threads)} 个帖子")
-            else:
-                # 正常监控时只显示简要统计
-                new_count = sum(1 for thread in threads if thread['thread_id'] not in self.processed_threads)
-                if new_count > 0:
-                    print(f"📊 共发现 {len(threads)} 个帖子，其中 {new_count} 个新帖子")
-                else:
-                    print(f"📊 检查完成，共 {len(threads)} 个帖子，无新帖子")
+            print(f"📊 共发现 {len(threads)} 个帖子")
 
             # 如果没有找到帖子，输出调试信息
             if not threads:
@@ -876,12 +843,13 @@ class AicutForumCrawler:
 
         try:
             # 🎯 使用统一的封面标题提取函数（视频处理模块，TTS系统可选）
-            from pre.stage.unified_content_processor import extract_cover_title_up, extract_cover_title_middle, extract_cover_title_down
+            import importlib
+            processor = importlib.import_module('pre.stage.unified_content_processor')
 
             # 提取封面标题上、中、下
-            cover_title_up = extract_cover_title_up(content)
-            cover_title_middle = extract_cover_title_middle(content)
-            cover_title_down = extract_cover_title_down(content)
+            cover_title_up = getattr(processor, 'extract_cover_title_up')(content)
+            cover_title_middle = getattr(processor, 'extract_cover_title_middle')(content)
+            cover_title_down = getattr(processor, 'extract_cover_title_down')(content)
 
             # 🎯 使用统一的up/middle/down字段名，只保存和显示有内容的标题
             extracted_titles = []
@@ -989,7 +957,9 @@ class AicutForumCrawler:
             sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
             try:
-                from pre.stage.unified_content_processor import process_forum_content_unified
+                import importlib
+                processor = importlib.import_module('pre.stage.unified_content_processor')
+                process_forum_content_unified = getattr(processor, 'process_forum_content_unified')
 
                 # 使用统一结构化处理器
                 structured = process_forum_content_unified(content)
@@ -1105,9 +1075,7 @@ class AicutForumCrawler:
     def monitor_new_posts(self) -> List[Dict[str, Any]]:
         """监控新帖子 - 智能模式切换版本"""
         try:
-            # 只在首次检查或调试时显示详细时间
-            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
-                print(f"🔍 开始监控智能剪口播板块 ({datetime.now().strftime('%H:%M:%S')})")
+            print(f"🔍 开始监控智能剪口播板块 ({datetime.now().strftime('%H:%M:%S')})")
 
             # 获取所有帖子
             threads = self.get_forum_threads()
@@ -1178,7 +1146,7 @@ class AicutForumCrawler:
                     return []
 
                 # 正常监控：只处理新帖子
-                new_threads = []
+                print("🚀 生产模式：只检查新帖子")
                 for thread in threads:
                     thread_id = thread['thread_id']
 
@@ -1186,19 +1154,7 @@ class AicutForumCrawler:
                     if thread_id in self.processed_threads:
                         continue
 
-                    new_threads.append(thread)
                     print(f"🆕 发现新帖子: {thread['title']} (ID: {thread_id})")
-
-                    # 立即标记为已处理，避免重复处理
-                    self.mark_post_processed(thread_id)
-
-                # 如果没有新帖子，简化输出
-                if not new_threads:
-                    return []
-
-                print(f"🚀 开始处理 {len(new_threads)} 个新帖子")
-
-                for thread in new_threads:
 
                     # 获取帖子详细内容
                     thread_content = self.get_thread_content(thread['thread_url'])
@@ -1236,7 +1192,8 @@ class AicutForumCrawler:
                     else:
                         print(f"⚠️ 新帖子无有效内容: {thread['title']}")
 
-                    # 注意：帖子已在发现时标记为已处理，这里不需要重复标记
+                    # 生产模式：标记为已处理并立即保存
+                    self.mark_post_processed(thread_id)
 
             if new_video_posts:
                 print(f"✅ 发现 {len(new_video_posts)} 个新的视频帖子")
@@ -1319,7 +1276,6 @@ class AicutForumCrawler:
     def _reply_with_attachments(self, thread_id: str, content: str, video_files: List[str]) -> bool:
         """带附件的回复 - 支持腾讯云上传按钮"""
         try:
-            import os
 
             # 构建完整回复页面URL
             reply_url = f"{self.base_url}/forum.php?mod=post&action=reply&tid={thread_id}"
@@ -1340,7 +1296,7 @@ class AicutForumCrawler:
             tencent_upload_button = self._find_tencent_upload_button(soup)
             if tencent_upload_button:
                 print("🔍 发现腾讯云上传按钮，尝试使用腾讯云上传...")
-                success = self._upload_via_tencent_cloud(thread_id, content, video_files, form_hash, soup)
+                success = self._upload_via_tencent_cloud(thread_id, content, video_files, form_hash)
                 if success:
                     return True
                 else:
@@ -1377,7 +1333,7 @@ class AicutForumCrawler:
             return False
 
     def _upload_via_tencent_cloud(self, thread_id: str, content: str, video_files: List[str],
-                                 form_hash: str, soup: BeautifulSoup) -> bool:
+                                 form_hash: str) -> bool:
         """通过腾讯云上传按钮上传文件"""
         try:
             print("🚀 尝试腾讯云上传方式...")
