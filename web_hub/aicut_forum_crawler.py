@@ -26,8 +26,6 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from shared.forum_config import load_forum_settings
-
 # 尝试导入 Selenium（可选）
 try:
     from selenium import webdriver
@@ -45,6 +43,9 @@ class AicutForumCrawler:
 
     def __init__(self, username: str = "", password: str = "", test_mode: bool = True, test_once: bool = False,
                  base_url: str = "", forum_url: str = ""):
+        # 延迟导入避免循环导入
+        from shared.forum_config import load_forum_settings
+
         # 统一从配置文件加载默认设置
         settings = load_forum_settings()
         forum_cfg = settings.get("forum", {})
