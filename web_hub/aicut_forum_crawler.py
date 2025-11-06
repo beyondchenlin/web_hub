@@ -1188,6 +1188,9 @@ class AicutForumCrawler:
                     new_threads.append(thread)
                     print(f"🆕 发现新帖子: {thread['title']} (ID: {thread_id})")
 
+                    # 立即标记为已处理，避免重复处理
+                    self.mark_post_processed(thread_id)
+
                 # 如果没有新帖子，简化输出
                 if not new_threads:
                     return []
@@ -1232,8 +1235,7 @@ class AicutForumCrawler:
                     else:
                         print(f"⚠️ 新帖子无有效内容: {thread['title']}")
 
-                    # 生产模式：标记为已处理并立即保存
-                    self.mark_post_processed(thread_id)
+                    # 注意：帖子已在发现时标记为已处理，这里不需要重复标记
 
             if new_video_posts:
                 print(f"✅ 发现 {len(new_video_posts)} 个新的视频帖子")
