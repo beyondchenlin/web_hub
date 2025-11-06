@@ -366,17 +366,35 @@ class AicutForumCrawler:
                                 title = link_text
                                 break
 
-                    # 查找作者信息
-                    author_link = row.find('a', href=re.compile(r'space-uid-\d+\.html'))
-                    author = author_link.get_text(strip=True) if author_link else "未知用户"
-
-                    # 🎯 提取作者ID（从 space-uid-5.html 中提取 uid-5）
+                    # 🎯 精确查找发帖作者信息（排除最后回复者）
+                    author = "未知用户"
                     author_id = ""
-                    if author_link:
-                        author_href = author_link.get('href', '')
-                        author_id_match = re.search(r'space-(uid-\d+)\.html', author_href)
-                        if author_id_match:
-                            author_id = author_id_match.group(1)  # 结果：uid-5
+
+                    # 在帖子行中查找所有 space-uid 链接
+                    space_uid_links = row.find_all('a', href=re.compile(r'space-uid-\d+\.html'))
+
+                    if space_uid_links:
+                        # 通常第一个 space-uid 链接是发帖作者，最后一个是最后回复者
+                        # 但为了更准确，我们查找在 <cite> 标签内的第一个作者链接
+                        author_link = None
+
+                        # 方法1: 查找在 cite 标签内的作者链接（发帖作者通常在这里）
+                        for link in space_uid_links:
+                            if link.parent and link.parent.name == 'cite':
+                                author_link = link
+                                break
+
+                        # 方法2: 如果没找到，使用第一个 space-uid 链接（通常是发帖作者）
+                        if not author_link:
+                            author_link = space_uid_links[0]
+
+                        # 提取作者信息
+                        if author_link:
+                            author = author_link.get_text(strip=True)
+                            author_href = author_link.get('href', '')
+                            author_id_match = re.search(r'space-(uid-\d+)\.html', author_href)
+                            if author_id_match:
+                                author_id = author_id_match.group(1)  # 结果：uid-5
 
                     # 查找发帖时间
                     time_elements = row.find_all('em')
@@ -510,20 +528,106 @@ class AicutForumCrawler:
                     audio_urls.append(audio_url)
                     print(f"🎵 从附件中提取音频URL: {audio_url}")
 
-            # 🎯 提取作者信息（从帖子页面）
+            # 🎯 提取作者信息（从帖子页面）- 精确定位发帖作者
             author = "未知用户"
             author_id = ""
             try:
-                # 查找作者链接：<a href="space-uid-5.html">梁士雄</a>
-                author_link = soup.find('a', href=re.compile(r'space-uid-\d+\.html'))
+                author_link = None
+
+                # 方法1: 在 #postlist 中查找第一个帖子的作者信息区域
+                postlist = soup.find(id='postlist')
+                if postlist:
+                    # 查找第一个帖子容器（楼主帖子）
+                    first_post = postlist.select_one('div[id^="post_"], table[id^="post_"]')
+                    if first_post:
+                        # 在第一个帖子的作者信息区域查找
+                        authi = first_post.find(class_='authi')
+                        if authi:
+                            # 在 .authi 区域内查找作者链接
+                            author_link = authi.find('a', href=re.compile(r'space-uid-\d+\.html'))
+                            if author_link:
+                                print("✅ 在帖子作者信息区域找到作者链接")
+
+                # 方法2: 如果没有找到，查找帖子标题附近的作者信息
+                if not author_link:
+                    # 查找帖子标题元素
+                    title_elem = soup.find('span', id='thread_subject')
+                    if title_elem:
+                        # 在标题附近查找作者信息
+                        title_container = title_elem.find_parent('div') or title_elem.find_parent('td')
+                        if title_container:
+                            # 在标题容器的兄弟元素中查找作者链接
+                            for sibling in title_container.find_next_siblings():
+                                author_link = sibling.find('a', href=re.compile(r'space-uid-\d+\.html'))
+                                if author_link:
+                                    print("✅ 在帖子标题附近找到作者链接")
+                                    break
+
+                # 方法3: 在帖子信息栏查找（通常在帖子标题下方）
+                if not author_link:
+                    # 查找包含发帖信息的区域
+                    post_info_selectors = [
+                        '.postinfo',
+                        '.authi',
+                        'div[class*="author"]',
+                        'td[class*="author"]'
+                    ]
+
+                    for selector in post_info_selectors:
+                        post_info = soup.select_one(selector)
+                        if post_info:
+                            author_link = post_info.find('a', href=re.compile(r'space-uid-\d+\.html'))
+                            if author_link:
+                                print(f"✅ 在 {selector} 区域找到作者链接")
+                                break
+
+                # 方法4: 最后兜底 - 但要排除导航栏和回复者链接
+                if not author_link:
+                    # 查找所有 space-uid 链接，但排除明显的导航区域
+                    all_space_links = soup.find_all('a', href=re.compile(r'space-uid-\d+\.html'))
+
+                    for link in all_space_links:
+                        # 检查链接是否在导航栏或页脚
+                        parent_chain = []
+                        current = link.parent
+                        while current and len(parent_chain) < 5:
+                            if current.get('id') or current.get('class'):
+                                parent_chain.append({
+                                    'tag': current.name,
+                                    'id': current.get('id', ''),
+                                    'class': current.get('class', [])
+                                })
+                            current = current.parent
+
+                        # 排除导航栏、页脚、侧边栏等区域的链接
+                        is_navigation = any(
+                            'nav' in str(p.get('class', [])).lower() or
+                            'header' in str(p.get('class', [])).lower() or
+                            'footer' in str(p.get('class', [])).lower() or
+                            'sidebar' in str(p.get('class', [])).lower() or
+                            p.get('id', '').lower() in ['header', 'footer', 'nav']
+                            for p in parent_chain
+                        )
+
+                        if not is_navigation:
+                            author_link = link
+                            print("✅ 使用兜底方案找到作者链接（已排除导航区域）")
+                            break
+
+                # 提取作者信息
                 if author_link:
-                    author = author_link.get_text(strip=True)
+                    author = author_link.get_text(strip=True) or author
                     author_href = author_link.get('href', '')
                     # 从 space-uid-5.html 中提取 uid-5
                     author_id_match = re.search(r'space-(uid-\d+)\.html', author_href)
                     if author_id_match:
                         author_id = author_id_match.group(1)  # 结果：uid-5
-                        print(f"👤 提取作者信息: {author} (ID: {author_id})")
+                        print(f"👤 精确提取作者信息: {author} (ID: {author_id})")
+                    else:
+                        print(f"⚠️ 未能从链接中解析作者ID: {author_href}")
+                else:
+                    print("❌ 未找到发帖作者链接")
+
             except Exception as e:
                 print(f"⚠️ 提取作者信息失败: {e}")
 
