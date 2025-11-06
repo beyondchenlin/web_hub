@@ -261,7 +261,9 @@ class AicutForumCrawler:
     def get_forum_threads(self) -> List[Dict[str, Any]]:
         """获取智能剪口播板块的所有帖子"""
         try:
-            print(f"📋 获取板块帖子: {self.forum_url}")
+            # 只在首次检查时显示详细URL
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print(f"📋 获取板块帖子: {self.forum_url}")
 
             # 🎯 增加重试机制处理网络超时
             max_retries = 3
@@ -270,9 +272,12 @@ class AicutForumCrawler:
 
             for attempt in range(max_retries):
                 try:
-                    print(f"🌐 请求板块页面... (尝试 {attempt + 1}/{max_retries})")
+                    # 只在首次检查或重试时显示详细信息
+                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed or attempt > 0:
+                        print(f"🌐 请求板块页面... (尝试 {attempt + 1}/{max_retries})")
                     response = self.session.get(self.forum_url, timeout=15)
-                    print(f"📄 板块页面状态码: {response.status_code}")
+                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed or attempt > 0:
+                        print(f"📄 板块页面状态码: {response.status_code}")
                     response.raise_for_status()
                     break  # 成功，跳出重试循环
                 except (requests.exceptions.ConnectTimeout, requests.exceptions.ReadTimeout) as e:
@@ -291,17 +296,22 @@ class AicutForumCrawler:
 
             # 保存页面内容用于调试
             page_content = response.text
-            print(f"📄 页面内容长度: {len(page_content)} 字符")
+            # 只在首次检查时显示页面内容长度
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print(f"📄 页面内容长度: {len(page_content)} 字符")
 
             soup = BeautifulSoup(page_content, 'html.parser')
             threads = []
 
             # 查找帖子列表 - 尝试多种选择器
-            print("🔍 查找帖子列表...")
+            # 只在首次检查时显示详细查找信息
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print("🔍 查找帖子列表...")
 
             # 方法1: 查找tbody标签
             thread_rows = soup.find_all('tbody')
-            print(f"🔍 找到 {len(thread_rows)} 个tbody元素")
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print(f"🔍 找到 {len(thread_rows)} 个tbody元素")
 
             # 方法2: 如果tbody没找到，尝试其他选择器
             if not thread_rows:
@@ -417,13 +427,24 @@ class AicutForumCrawler:
                     }
 
                     threads.append(thread_info)
-                    print(f"📝 发现帖子 {len(threads)}: {title} (ID: {thread_id}) - 作者: {author}")
+                    # 只在调试模式或首次检查时显示所有帖子
+                    if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                        print(f"📝 发现帖子 {len(threads)}: {title} (ID: {thread_id}) - 作者: {author}")
 
                 except Exception as e:
                     print(f"⚠️ 解析第 {i+1} 个帖子行失败: {e}")
                     continue
 
-            print(f"📊 共发现 {len(threads)} 个帖子")
+            # 简化日志输出
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print(f"📊 共发现 {len(threads)} 个帖子")
+            else:
+                # 正常监控时只显示简要统计
+                new_count = sum(1 for thread in threads if thread['thread_id'] not in self.processed_threads)
+                if new_count > 0:
+                    print(f"📊 共发现 {len(threads)} 个帖子，其中 {new_count} 个新帖子")
+                else:
+                    print(f"📊 检查完成，共 {len(threads)} 个帖子，无新帖子")
 
             # 如果没有找到帖子，输出调试信息
             if not threads:
@@ -1083,7 +1104,9 @@ class AicutForumCrawler:
     def monitor_new_posts(self) -> List[Dict[str, Any]]:
         """监控新帖子 - 智能模式切换版本"""
         try:
-            print(f"🔍 开始监控智能剪口播板块 ({datetime.now().strftime('%H:%M:%S')})")
+            # 只在首次检查或调试时显示详细时间
+            if not hasattr(self, 'first_check_completed') or not self.first_check_completed:
+                print(f"🔍 开始监控智能剪口播板块 ({datetime.now().strftime('%H:%M:%S')})")
 
             # 获取所有帖子
             threads = self.get_forum_threads()
@@ -1154,7 +1177,7 @@ class AicutForumCrawler:
                     return []
 
                 # 正常监控：只处理新帖子
-                print("🚀 生产模式：只检查新帖子")
+                new_threads = []
                 for thread in threads:
                     thread_id = thread['thread_id']
 
@@ -1162,7 +1185,16 @@ class AicutForumCrawler:
                     if thread_id in self.processed_threads:
                         continue
 
+                    new_threads.append(thread)
                     print(f"🆕 发现新帖子: {thread['title']} (ID: {thread_id})")
+
+                # 如果没有新帖子，简化输出
+                if not new_threads:
+                    return []
+
+                print(f"🚀 开始处理 {len(new_threads)} 个新帖子")
+
+                for thread in new_threads:
 
                     # 获取帖子详细内容
                     thread_content = self.get_thread_content(thread['thread_url'])
