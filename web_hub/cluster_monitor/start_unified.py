@@ -4,10 +4,14 @@
 合并了 start.py, start_production.py, start_standalone.py 的功能
 消除代码重复，提供统一的启动接口
 
+克隆/并行运行注意:
+- 同机运行多个项目或多个克隆副本时，务必修改 --port
+- 修改 monitor 端口后，需同步 cluster_monitor/machines.txt（工作节点地址）
+
 使用方法：
-  python start_unified.py --mode dev --port 8000                    # 开发模式
-  python start_unified.py --mode production --port 8000             # 生产模式
-  python start_unified.py --mode standalone --port 8000             # 独立模式
+  python start_unified.py --mode dev --port 8100                    # 开发模式
+  python start_unified.py --mode production --port 8100             # 生产模式
+  python start_unified.py --mode standalone --port 8100             # 独立模式
   python start_unified.py --install-deps                            # 安装依赖
   python start_unified.py --check-only                              # 只检查环境
 """
@@ -267,7 +271,8 @@ def main():
     parser = argparse.ArgumentParser(description='集群监控系统统一启动器')
     parser.add_argument('--mode', choices=['dev', 'production', 'standalone'],
                        default='standalone', help='启动模式 (默认: standalone)')
-    parser.add_argument('--port', type=int, default=8000, help='监听端口 (默认: 8000)')
+    # 克隆项目并行运行时请显式传 --port，避免与其他副本冲突
+    parser.add_argument('--port', type=int, default=8100, help='监听端口 (默认: 8100)')
     parser.add_argument('--workers', type=int, default=4, help='Worker进程数 (默认: 4)')
     parser.add_argument('--daemon', action='store_true', help='后台运行（仅生产模式）')
     parser.add_argument('--install-deps', action='store_true', help='自动安装依赖')

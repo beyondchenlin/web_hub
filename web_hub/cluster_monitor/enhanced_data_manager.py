@@ -94,10 +94,17 @@ class ForumPostRecord:
 class SQLiteRedisDataManager:
     """SQLite + Redis 双层存储数据管理器"""
 
-    def __init__(self, db_path: str = "data/forum_posts.db",
-                 redis_host: str = "localhost", redis_port: int = 6379, redis_db: int = 1):
+    def __init__(
+        self,
+        db_path: str = "data/forum_posts.db",
+        redis_host: str = "localhost",
+        redis_port: int = 6379,
+        redis_db: int = 1,
+        redis_prefix: str = "clonetts_monitor:",
+    ):
         self.db_path = db_path
         self.redis_client = None
+        self.redis_prefix = (redis_prefix.rstrip(":") + ":") if redis_prefix else "clonetts_monitor:"
         self._lock = threading.RLock()
         self.logger = logging.getLogger(__name__)
 
@@ -235,9 +242,6 @@ class SQLiteRedisDataManager:
             self.redis_client = redis.Redis(**self.redis_config)
             self.redis_client.ping()
             self.logger.info("Redis连接成功")
-
-            # 设置Redis键前缀
-            self.redis_prefix = "forum_monitor:"
 
         except Exception as e:
             self.logger.warning(f"Redis连接失败: {e}，将只使用SQLite存储")
@@ -614,5 +618,25 @@ def get_sqlite_redis_data_manager() -> SQLiteRedisDataManager:
     """获取SQLite + Redis数据管理器单例"""
     global _data_manager
     if _data_manager is None:
-        _data_manager = SQLiteRedisDataManager()
+        db_path = os.getenv("FORUM_DB_PATH", "data/forum_posts.db")
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_prefix = os.getenv("REDIS_PREFIX", "clonetts_monitor:")
+        try:
+            redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        except ValueError:
+            redis_port = 6379
+        # 监控端默认使用独立DB=1，避免误用工作节点的 REDIS_DB=0
+        monitor_redis_db = os.getenv("MONITOR_REDIS_DB", os.getenv("REDIS_MONITOR_DB", "1"))
+        try:
+            redis_db = int(monitor_redis_db)
+        except ValueError:
+            redis_db = 1
+
+        _data_manager = SQLiteRedisDataManager(
+            db_path=db_path,
+            redis_host=redis_host,
+            redis_port=redis_port,
+            redis_db=redis_db,
+            redis_prefix=redis_prefix,
+        )
     return _data_manager

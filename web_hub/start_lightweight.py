@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 轻量级视频处理系统启动脚本
+
+克隆/并行运行注意:
+- 同机运行多个项目或多个克隆副本时，务必修改 --port
+- 修改 worker 端口后，需同步 web_hub/cluster_monitor/machines.txt
 """
 
 import os
@@ -86,7 +90,7 @@ def test_system(test_mode=False, role="worker"):
         print(f"❌ 系统测试失败: {e}")
         return False
 
-def start_system(test_mode=False, test_once=False, role="worker", port=8005):
+def start_system(test_mode=False, test_once=False, role="worker", port=8105):
     """启动集群系统"""
     if test_once:
         mode_name = "🧪 测试模式（单次运行）"
@@ -317,7 +321,8 @@ def main():
     # 集群角色：monitor=监控节点，worker=工作节点（默认）
     parser.add_argument("--role", type=str, choices=['monitor', 'worker'], default='worker',
                        help="集群角色：monitor=监控节点（监控论坛），worker=工作节点（处理TTS/配音，默认）")
-    parser.add_argument("--port", type=int, default=8005, help="Web服务器端口")
+    # 克隆项目并行运行时请显式传 --port，避免与其他副本冲突
+    parser.add_argument("--port", type=int, default=8105, help="Web服务器端口（建议克隆副本使用不同端口）")
     parser.add_argument("--log-mode", choices=['development', 'production', 'silent'],
                        default='development', help="日志模式")
     parser.add_argument("--quiet", action="store_true", help="静默模式（最小日志输出）")
