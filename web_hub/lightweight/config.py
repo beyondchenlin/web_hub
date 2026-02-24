@@ -64,7 +64,7 @@ class LightweightConfig:
     monitor_interval: int = 5  # 秒
     resource_check_interval: int = 10  # 秒
     memory_limit_gb: float = 50.0  # 调整为50GB (80% = 40GB)
-    disk_limit_gb: float = 500.0   # 调整为500GB
+    disk_limit_gb: float = 2000.0  # 调整为2000GB (2TB)
 
     # 任务配置
     task_timeout: int = 3600  # 秒
