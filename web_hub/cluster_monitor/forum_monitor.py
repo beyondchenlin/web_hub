@@ -255,7 +255,8 @@ class ForumMonitor:
     
     def load_machines(self):
         """从配置文件加载机器列表"""
-        machines_file = "machines.txt"
+        # 使用当前脚本所在目录的 machines.txt，而不是工作目录
+        machines_file = os.path.join(os.path.dirname(__file__), "machines.txt")
         if not os.path.exists(machines_file):
             # 创建示例配置文件
             with open(machines_file, 'w', encoding='utf-8') as f:
