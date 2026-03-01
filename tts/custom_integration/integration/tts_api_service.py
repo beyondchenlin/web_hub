@@ -545,7 +545,9 @@ class TTSAPIService:
 
                 try:
                     import subprocess
-                    temp_wav = audio_file.replace(file_ext, '_converted.wav')
+                    # Build output path from splitext to avoid case-sensitive replace issues (e.g. .MOV)
+                    audio_base, _ = os.path.splitext(audio_file)
+                    temp_wav = f"{audio_base}_converted.wav"
 
                     # 🎯 使用项目内置的FFmpeg
                     # 路径：D:\clonetts\tts\indextts2\py312\ffmpeg\bin\ffmpeg.exe
