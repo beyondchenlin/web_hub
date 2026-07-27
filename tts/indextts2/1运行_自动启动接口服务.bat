@@ -1,7 +1,4 @@
 @echo off
-rem cd to the script's own directory so %cd%\py312 and %cd%\logs resolve correctly
-rem when launched from another cwd (e.g. by the auto-restart logic) python/logs would fail
-cd /d "%~dp0"
 
 set GRADIO_TEMP_DIR=%cd%\tmp\
 SET PYTHON_PATH=%cd%\py312\
@@ -30,4 +27,3 @@ set XFORMERS_FORCE_DISABLE_TRITON=1
 if not exist logs mkdir logs
 "%PYTHON_EXECUTABLE%" -s app.py
 pause
-
