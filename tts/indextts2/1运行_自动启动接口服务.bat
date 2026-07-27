@@ -28,5 +28,6 @@ set XFORMERS_FORCE_DISABLE_TRITON=1
 @REM set PYTHONPATH=third_party/AcademiCodec;third_party/Matcha-TTS
 
 if not exist logs mkdir logs
-"%PYTHON_EXECUTABLE%" -s app.py >> "%cd%\logs\api_run.log" 2>&1
+"%PYTHON_EXECUTABLE%" -s app.py
 pause
+
