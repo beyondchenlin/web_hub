@@ -80,6 +80,13 @@ API_TIMEOUT = 30                   # API请求超时时间(秒)，原300会导�
 API_MAX_RETRIES = 3                # API最大重试次数
 API_RETRY_DELAY = 2                # 重试延迟(秒)
 
+# ==================== 引擎自愈配置 ====================
+# 合成接口返回 500/异常时，自动重启引擎并重试，尽量不让用户看到“噪音/失败”
+ENGINE_RESTART_ON_500 = True           # 是否在 TTS 失败时自动重启引擎（True=优先保证不失败）
+ENGINE_LAUNCH_CMD = ""                 # 引擎启动脚本；留空则自动推断为 tts/indextts2/1运行_自动启动接口服务.bat
+ENGINE_READY_TIMEOUT = 180            # 重启后等待引擎就绪的最长秒数
+
+
 # ==================== 性能配置 ====================
 MAX_CONCURRENT_TASKS = 4           # 最大并发任务数
 CACHE_MAX_SIZE = 100               # 缓存最大条目数

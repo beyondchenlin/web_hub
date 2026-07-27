@@ -17,12 +17,14 @@ from enum import Enum
 import threading
 import queue
 import shutil
+import subprocess
 
 # 导入配置
 from tts_config import (
     INDEXTTS2_API_URL, DATABASE_PATH, OUTPUTS_USERS_DIR,
     VOICES_USERS_DIR, API_TIMEOUT, API_MAX_RETRIES, API_RETRY_DELAY,
-    MAX_CONCURRENT_TASKS
+    MAX_CONCURRENT_TASKS, INDEXTTS2_HOST, INDEXTTS2_PORT,
+    ENGINE_RESTART_ON_500, ENGINE_LAUNCH_CMD, ENGINE_READY_TIMEOUT
 )
 from tts_forum_sync import TTSForumUserSync
 from tts_permission_manager import PermissionManager
@@ -53,6 +55,17 @@ class TTSAPIService:
         self.timeout = API_TIMEOUT
         self.max_retries = API_MAX_RETRIES
         self.retry_delay = API_RETRY_DELAY
+
+        # 引擎自愈配置：合成失败时自动重启引擎并重试，尽量不让用户失败
+        self.engine_restart_enabled = ENGINE_RESTART_ON_500
+        if ENGINE_LAUNCH_CMD:
+            self.engine_launch_cmd = ENGINE_LAUNCH_CMD
+        else:
+            indextts2_root = Path(__file__).resolve().parents[3] / "tts" / "indextts2"
+            self.engine_launch_cmd = str(indextts2_root / "1运行_自动启动接口服务.bat")
+        self.engine_ready_timeout = ENGINE_READY_TIMEOUT
+        if self.engine_restart_enabled:
+            logger.info(f"🛡️ 引擎自愈已启用: 失败时将自动重启 {self.engine_launch_cmd}")
 
         # 🎯 初始化数据库连接
         self.db_conn = sqlite3.connect(DATABASE_PATH, check_same_thread=False)
@@ -292,65 +305,155 @@ class TTSAPIService:
     
     def _call_tts_api(self, text: str, speaker: str, speed: float = 1.0,
                       emotion: str = '', emotion_weight: float = 0.5) -> Optional[bytes]:
-        """调用TTS API"""
+        """调用TTS API，带故障自愈：
+        引擎返回500/异常时自动重启引擎并重试，尽量不让用户听到噪音或看到失败。
+        """
+        params = {
+            'text': text,
+            'speaker': speaker,
+            'speed': str(speed)
+        }
+        if emotion:
+            params['emo'] = emotion
+            params['weight'] = str(emotion_weight)
+
+        url = f"{self.api_url}/?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+
+        restarted = False
+        attempts = self.max_retries + 1  # 首次 + 重试次数
+        for attempt in range(1, attempts + 1):
+            # 重启后的首次重试放宽超时（模型刚重新加载，首句可能偏慢）
+            timeout = self.timeout if (attempt == 1 or not restarted) else max(self.timeout, 120)
+            try:
+                logger.info(f"📡 调用TTS API (第{attempt}/{attempts}次): {speaker}")
+                response = requests.get(url, timeout=timeout)
+
+                if response.status_code == 200:
+                    logger.info(f"✅ TTS API调用成功")
+                    return response.content
+
+                # 非200（含引擎500）：记录真实报错，进入自愈/重试
+                logger.error(f"❌ TTS API返回错误({response.status_code}) | body={response.text[:200]}")
+            except Exception as e:
+                logger.error(f"❌ TTS API调用异常(第{attempt}次): {type(e).__name__}: {e}")
+
+            # 故障自愈：仅尝试一次重启引擎（避免反复重启），之后继续重试请求
+            if not restarted and self.engine_restart_enabled:
+                restarted = True
+                if self._restart_engine():
+                    logger.warning("🔄 已重启引擎，准备重试合成请求")
+                else:
+                    logger.error("⚠️ 引擎重启失败，继续重试原请求")
+
+            if attempt < attempts:
+                time.sleep(self.retry_delay)
+
+        logger.error(f"❌ TTS API在{attempts}次尝试后仍不可用: {speaker}")
+        return None
+
+    def _restart_engine(self) -> bool:
+        """重启 IndexTTS2 引擎：
+        1) 结束占用端口的现有进程（精确按端口，不误伤其他 python）
+        2) 用启动脚本重新拉起引擎（后台分离进程，输出重定向到日志）
+        3) 就绪探测：直到 GET / 返回 200
+        成功返回 True，失败返回 False。
+        """
         try:
-            params = {
-                'text': text,
-                'speaker': speaker,
-                'speed': str(speed)
-            }
+            port = INDEXTTS2_PORT
+            # 1) 结束占用端口的现有进程
+            try:
+                out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=15).stdout
+                for line in out.splitlines():
+                    cols = line.split()
+                    if len(cols) >= 5 and f":{port}" in cols[1] and cols[3] == "LISTENING":
+                        pid = cols[4]
+                        subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=15)
+                        logger.info(f"🛑 已结束占用端口 {port} 的进程 PID={pid}")
+                        break
+            except Exception as e:
+                logger.warning(f"⚠️ 查找/结束端口进程失败（忽略）: {e}")
 
-            if emotion:
-                params['emo'] = emotion
-                params['weight'] = str(emotion_weight)
+            # 2) 用启动脚本重新拉起引擎
+            bat = self.engine_launch_cmd
+            if not bat or not os.path.exists(bat):
+                logger.error(f"❌ 引擎启动脚本不存在: {bat}")
+                return False
+            subprocess.Popen([bat], shell=True,
+                             creationflags=0x00000008,  # DETACHED_PROCESS：无控制台、后台运行
+                             close_fds=True)
+            logger.info(f"🚀 已用启动脚本重新拉起引擎: {bat}")
 
-            url = f"{self.api_url}/?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
-
-            logger.info(f"📡 调用TTS API: {speaker}")
-            response = requests.get(url, timeout=self.timeout)
-
-            if response.status_code == 200:
-                logger.info(f"✅ TTS API调用成功")
-                return response.content
-            else:
-                # 不再用假音频伪装成功：非200(含引擎500)直接返回 None，
-                # 由上游 process_tts_request 统一返回明确的“TTS API调用失败”，
-                # 避免把引擎内部错误伪装成高频噪音返回给用户。
-                logger.error(f"❌ TTS API返回错误: {response.status_code} | body={response.text[:200]}")
-                return None
-
+            # 3) 就绪探测：直到 GET / 返回 200
+            deadline = time.time() + self.engine_ready_timeout
+            while time.time() < deadline:
+                time.sleep(5)
+                try:
+                    probe = requests.get(f"{self.api_url}/", timeout=5)
+                    if probe.status_code == 200:
+                        logger.info("✅ 引擎重启后已就绪")
+                        return True
+                except Exception:
+                    pass
+            logger.error(f"⚠️ 引擎在 {self.engine_ready_timeout}s 内未就绪")
+            return False
         except Exception as e:
-            logger.error(f"❌ TTS API调用异常: {str(e)}")
-            return None
-    
-    def _generate_mock_audio(self, text: str) -> bytes:
-        """生成模拟音频数据（用于测试）"""
-        import wave
-        import struct
-        import io
+            logger.error(f"❌ 重启引擎异常: {type(e).__name__}: {e}")
+            return False
 
-        # 生成简单的正弦波音频（1秒，440Hz）
-        sample_rate = 22050
-        duration = min(len(text) * 0.1, 5.0)  # 根据文本长度，最多5秒
-        num_samples = int(sample_rate * duration)
+    def _preprocess_reference_audio(self, input_path: str, target_path: str,
+                                    target_sr: int = 24000, max_seconds: float = 20.0) -> bool:
+        """将任意参考音频清洗为引擎友好的格式（修复“克隆声音变高频噪音/引擎500”的根因）：
+           - 重采样到模型期望的 24000Hz（与 checkpoints/config.yaml 的 dataset/mel.sample_rate 一致）
+           - 转单声道
+           - 裁剪首尾静音
+           - 选取/截取最长有效段，最长 max_seconds
+           - 峰值归一化到 0.95，避免过轻/过载
+        成功返回 True。
+        """
+        try:
+            import numpy as np
+            import librosa
+            import soundfile as sf
 
-        # 生成音频数据
-        audio_data = []
-        for i in range(num_samples):
-            # 简单的正弦波
-            value = int(32767.0 * 0.3 * (i % 100) / 100.0)
-            audio_data.append(struct.pack('<h', value))
+            logger.info(f"   🧹 清洗参考音频: {os.path.basename(input_path)}")
+            y, sr = librosa.load(input_path, sr=target_sr, mono=True)
 
-        # 创建WAV文件
-        buffer = io.BytesIO()
-        with wave.open(buffer, 'wb') as wav_file:
-            wav_file.setnchannels(1)  # 单声道
-            wav_file.setsampwidth(2)  # 16位
-            wav_file.setframerate(sample_rate)
-            wav_file.writeframes(b''.join(audio_data))
+            # 裁剪首尾静音
+            y_trim, _ = librosa.effects.trim(y, top_db=30)
+            if len(y_trim) < int(target_sr * 0.5):
+                y_trim = y  # 过短则放弃裁剪
 
-        logger.info(f"🎵 生成模拟音频: {duration:.1f}秒, {len(buffer.getvalue())} 字节")
-        return buffer.getvalue()
+            # 超过 max_seconds：用滑动窗口 RMS 挑选能量最高的片段
+            if len(y_trim) / target_sr > max_seconds:
+                win = int(target_sr * 1.0)
+                if len(y_trim) > win:
+                    hop = int(target_sr * 0.5)
+                    best_start, best_rms = 0, -1.0
+                    for s in range(0, len(y_trim) - win, hop):
+                        seg = y_trim[s:s + win]
+                        rms = float(np.sqrt(np.mean(seg ** 2)))
+                        if rms > best_rms:
+                            best_rms, best_start = rms, s
+                    y_trim = y_trim[best_start:best_start + int(target_sr * max_seconds)]
+                else:
+                    y_trim = y_trim[:int(target_sr * max_seconds)]
+
+            # 峰值归一化
+            peak = float(np.max(np.abs(y_trim))) if len(y_trim) else 0.0
+            if peak < 1e-4:
+                logger.warning("   ⚠️ 参考音频几乎静音，仍保留原样以避免失败")
+            else:
+                y_trim = y_trim / peak * 0.95
+
+            sf.write(str(target_path), y_trim.astype(np.float32), target_sr, subtype='PCM_16')
+            dur = len(y_trim) / target_sr
+            logger.info(f"   ✓ 参考音频已清洗: {target_sr}Hz/单声道/{dur:.2f}s")
+            return True
+        except Exception as e:
+            logger.error(f"❌ 参考音频清洗失败: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
 
     def _get_next_voice_number(self, user_id: str, voice_name: str) -> int:
         """
@@ -597,11 +700,12 @@ class TTSAPIService:
                     logger.error(f"   ❌ 音频提取/转换异常: {e}")
                     raise
 
-            # 加载并标准化音频（22050 Hz）
-            logger.info(f"   正在处理音频文件...")
-            audio, sr = librosa.load(audio_file_to_process, sr=22050)
-            duration = len(audio) / sr
-            logger.info(f"   音频时长: {duration:.2f}秒，采样率: {sr}Hz")
+            # 🎯 清洗参考音频：统一为模型期望的 24000Hz 单声道，并做归一化/去静音/截断
+            # 直接修复“克隆声音变高频噪音/引擎500”的根因：脏参考音频
+            logger.info(f"   正在清洗参考音频...")
+            if not self._preprocess_reference_audio(audio_file_to_process, str(target_audio_path),
+                                                    target_sr=24000, max_seconds=20.0):
+                raise Exception("参考音频清洗失败")
 
             # 🎯 清理临时转换文件
             if audio_file_to_process != audio_file and os.path.exists(audio_file_to_process):
@@ -611,9 +715,11 @@ class TTSAPIService:
                 except Exception as e:
                     logger.warning(f"   ⚠️ 清理临时文件失败: {e}")
 
-            # 保存标准化后的音频
-            sf.write(str(target_audio_path), audio, sr, subtype='PCM_16')
-            logger.info(f"   ✓ 音频已保存")
+            # 读取清洗后的信息用于日志
+            info = sf.info(str(target_audio_path))
+            duration = info.frames / info.samplerate
+            sr = info.samplerate
+            logger.info(f"   ✓ 音频已保存 ({sr}Hz/{duration:.2f}秒)")
 
             # 创建相对路径（相对于 IndexTTS2 根目录）
             relative_audio_path = f"voices/audio/{user_id}/{target_audio_filename}"
