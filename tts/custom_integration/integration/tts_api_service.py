@@ -48,7 +48,13 @@ class RequestStatus(Enum):
 
 class TTSAPIService:
     """TTS API服务 - 处理TTS和音色克隆请求"""
-    
+
+    # 引擎重启并发保护：多线程同时遇到500时只允许一个线程执行重启，
+    # 其余线程等待其完成后直接做就绪探测，避免互相kill刚拉起的引擎
+    _restart_lock = threading.Lock()
+    _last_restart_ts = 0.0
+    _RESTART_COOLDOWN = 60  # 秒：冷却期内不重复重启
+
     def __init__(self):
         """初始化API服务"""
         self.api_url = INDEXTTS2_API_URL
@@ -317,7 +323,9 @@ class TTSAPIService:
             params['emo'] = emotion
             params['weight'] = str(emotion_weight)
 
-        url = f"{self.api_url}/?{'&'.join([f'{k}={v}' for k, v in params.items()])}"
+        # 用 params= 让 requests 自动做 URL 编码：
+        # 文案含 &/#/%/空格 等字符时手工拼串会截断参数甚至诱发引擎500
+        url = f"{self.api_url}/"
 
         restarted = False
         attempts = self.max_retries + 1  # 首次 + 重试次数
@@ -326,7 +334,7 @@ class TTSAPIService:
             timeout = self.timeout if (attempt == 1 or not restarted) else max(self.timeout, 120)
             try:
                 logger.info(f"📡 调用TTS API (第{attempt}/{attempts}次): {speaker}")
-                response = requests.get(url, timeout=timeout)
+                response = requests.get(url, params=params, timeout=timeout)
 
                 if response.status_code == 200:
                     logger.info(f"✅ TTS API调用成功")
@@ -352,53 +360,69 @@ class TTSAPIService:
         return None
 
     def _restart_engine(self) -> bool:
-        """重启 IndexTTS2 引擎：
-        1) 结束占用端口的现有进程（精确按端口，不误伤其他 python）
-        2) 用启动脚本重新拉起引擎（后台分离进程，输出重定向到日志）
-        3) 就绪探测：直到 GET / 返回 200
+        """重启 IndexTTS2 引擎（并发安全）：
+        1) 用锁保证同一时刻只有一个线程执行重启；其他线程等锁后走冷却期判断，
+           直接做就绪探测，避免互相kill刚拉起的引擎
+        2) 结束占用端口的现有进程（精确按端口，不误伤其他 python）
+        3) 用启动脚本重新拉起引擎（cwd=脚本所在目录，脚本内部依赖 %cd% 定位 py312）
+        4) 就绪探测：直到 GET / 返回 200
         成功返回 True，失败返回 False。
         """
-        try:
-            port = INDEXTTS2_PORT
-            # 1) 结束占用端口的现有进程
+        with TTSAPIService._restart_lock:
+            # 冷却期内说明刚有别的线程重启过：不重复kill/拉起，只做就绪探测
+            if time.time() - TTSAPIService._last_restart_ts < TTSAPIService._RESTART_COOLDOWN:
+                logger.info("⏳ 引擎刚被其他请求重启过，跳过重复重启，仅等待就绪")
+                return self._wait_engine_ready()
+            TTSAPIService._last_restart_ts = time.time()
+
             try:
-                out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=15).stdout
-                for line in out.splitlines():
-                    cols = line.split()
-                    if len(cols) >= 5 and f":{port}" in cols[1] and cols[3] == "LISTENING":
-                        pid = cols[4]
-                        subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=15)
-                        logger.info(f"🛑 已结束占用端口 {port} 的进程 PID={pid}")
-                        break
-            except Exception as e:
-                logger.warning(f"⚠️ 查找/结束端口进程失败（忽略）: {e}")
-
-            # 2) 用启动脚本重新拉起引擎
-            bat = self.engine_launch_cmd
-            if not bat or not os.path.exists(bat):
-                logger.error(f"❌ 引擎启动脚本不存在: {bat}")
-                return False
-            subprocess.Popen([bat], shell=True,
-                             creationflags=0x00000008,  # DETACHED_PROCESS：无控制台、后台运行
-                             close_fds=True)
-            logger.info(f"🚀 已用启动脚本重新拉起引擎: {bat}")
-
-            # 3) 就绪探测：直到 GET / 返回 200
-            deadline = time.time() + self.engine_ready_timeout
-            while time.time() < deadline:
-                time.sleep(5)
+                port = INDEXTTS2_PORT
+                # 1) 结束占用端口的现有进程（严格匹配端口，避免 :9880 误杀 :98801）
                 try:
-                    probe = requests.get(f"{self.api_url}/", timeout=5)
-                    if probe.status_code == 200:
-                        logger.info("✅ 引擎重启后已就绪")
-                        return True
-                except Exception:
-                    pass
-            logger.error(f"⚠️ 引擎在 {self.engine_ready_timeout}s 内未就绪")
-            return False
-        except Exception as e:
-            logger.error(f"❌ 重启引擎异常: {type(e).__name__}: {e}")
-            return False
+                    out = subprocess.run(["netstat", "-ano"], capture_output=True, text=True, timeout=15).stdout
+                    for line in out.splitlines():
+                        cols = line.split()
+                        if len(cols) >= 5 and cols[1].endswith(f":{port}") and cols[3] == "LISTENING":
+                            pid = cols[4]
+                            subprocess.run(["taskkill", "/F", "/PID", pid], capture_output=True, timeout=15)
+                            logger.info(f"🛑 已结束占用端口 {port} 的进程 PID={pid}")
+                            break
+                except Exception as e:
+                    logger.warning(f"⚠️ 查找/结束端口进程失败（忽略）: {e}")
+
+                # 2) 用启动脚本重新拉起引擎
+                #    ⚠️ 必须设置 cwd=脚本所在目录：bat 内部用 %cd% 定位 py312/logs，
+                #    从 web_hub 等目录直接拉起会因找不到 python 而静默失败
+                bat = self.engine_launch_cmd
+                if not bat or not os.path.exists(bat):
+                    logger.error(f"❌ 引擎启动脚本不存在: {bat}")
+                    return False
+                subprocess.Popen([bat], shell=True,
+                                 cwd=os.path.dirname(os.path.abspath(bat)),
+                                 creationflags=0x00000008,  # DETACHED_PROCESS：无控制台、后台运行
+                                 close_fds=True)
+                logger.info(f"🚀 已用启动脚本重新拉起引擎: {bat}")
+
+                # 3) 就绪探测
+                return self._wait_engine_ready()
+            except Exception as e:
+                logger.error(f"❌ 重启引擎异常: {type(e).__name__}: {e}")
+                return False
+
+    def _wait_engine_ready(self) -> bool:
+        """轮询探测引擎是否就绪（GET / 返回 200）"""
+        deadline = time.time() + self.engine_ready_timeout
+        while time.time() < deadline:
+            time.sleep(5)
+            try:
+                probe = requests.get(f"{self.api_url}/", timeout=5)
+                if probe.status_code == 200:
+                    logger.info("✅ 引擎已就绪")
+                    return True
+            except Exception:
+                pass
+        logger.error(f"⚠️ 引擎在 {self.engine_ready_timeout}s 内未就绪")
+        return False
 
     def _preprocess_reference_audio(self, input_path: str, target_path: str,
                                     target_sr: int = 24000, max_seconds: float = 20.0) -> bool:
