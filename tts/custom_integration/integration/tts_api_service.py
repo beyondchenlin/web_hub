@@ -313,14 +313,15 @@ class TTSAPIService:
                 logger.info(f"✅ TTS API调用成功")
                 return response.content
             else:
-                logger.error(f"❌ TTS API返回错误: {response.status_code}")
-                logger.warning(f"⚠️ TTS API不可用，生成模拟音频数据用于测试")
-                return self._generate_mock_audio(text)
+                # 不再用假音频伪装成功：非200(含引擎500)直接返回 None，
+                # 由上游 process_tts_request 统一返回明确的“TTS API调用失败”，
+                # 避免把引擎内部错误伪装成高频噪音返回给用户。
+                logger.error(f"❌ TTS API返回错误: {response.status_code} | body={response.text[:200]}")
+                return None
 
         except Exception as e:
             logger.error(f"❌ TTS API调用异常: {str(e)}")
-            logger.warning(f"⚠️ TTS API不可用，生成模拟音频数据用于测试")
-            return self._generate_mock_audio(text)
+            return None
     
     def _generate_mock_audio(self, text: str) -> bytes:
         """生成模拟音频数据（用于测试）"""

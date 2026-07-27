@@ -76,7 +76,7 @@ LOG_FILE_MAX_BYTES = 10 * 1024 * 1024  # 10MB
 LOG_FILE_BACKUP_COUNT = 5
 
 # ==================== API配置 ====================
-API_TIMEOUT = 300                  # API请求超时时间(秒)
+API_TIMEOUT = 30                   # API请求超时时间(秒)，原300会导致引擎卡死时干等5分钟
 API_MAX_RETRIES = 3                # API最大重试次数
 API_RETRY_DELAY = 2                # 重试延迟(秒)
 
