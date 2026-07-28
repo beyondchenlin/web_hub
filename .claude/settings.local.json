@@ -8,7 +8,11 @@
       "Bash(PYTHONPATH=/d/index-tts-2-6G-0914/index-tts-2 /d/index-tts-2-6G-0914/index-tts-2/tts/indextts2/py312/python.exe:*)",
       "Bash(curl:*)",
       "Bash(env)",
-      "Bash(redis-cli:*)"
+      "Bash(redis-cli:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(py312/python.exe:*)"
     ],
     "deny": [],
     "ask": []
